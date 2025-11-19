@@ -103,18 +103,77 @@ curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search
 ```
 
 **Supported Parameters:**
-The service accepts any valid Meilisearch search parameters including:
-- `q` - Search query
-- `filter` - Filter expressions (string or array)
-- `sort` - Sort criteria (array)
-- `limit` - Number of results
-- `offset` - Pagination offset
-- `facets` - Facet fields (array)
-- `attributesToRetrieve` - Fields to return (array)
-- `attributesToCrop` - Fields to crop (array)
-- `cropLength` - Crop length
-- `attributesToHighlight` - Fields to highlight (array)
-- And any other Meilisearch search parameters, including nested JSON structures
+
+The service accepts all valid Meilisearch search parameters as documented in the [official Meilisearch API reference](https://www.meilisearch.com/docs/reference/api/search#search-parameters). All parameters are passed through to Meilisearch as-is.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `q` | String | `""` | Query string |
+| `offset` | Integer | `0` | Number of documents to skip |
+| `limit` | Integer | `20` | Maximum number of documents returned |
+| `hitsPerPage` | Integer | `1` | Maximum number of documents returned for a page |
+| `page` | Integer | `1` | Request a specific page of results |
+| `filter` | String or Array of strings | `null` | Filter queries by an attribute's value |
+| `facets` | Array of strings | `null` | Display the count of matches per facet |
+| `distinct` | String | `null` | Restrict search to documents with unique values of specified attribute |
+| `attributesToRetrieve` | Array of strings | `["*"]` | Attributes to display in the returned documents |
+| `attributesToCrop` | Array of strings | `null` | Attributes whose values have to be cropped |
+| `cropLength` | Integer | `10` | Maximum length of cropped value in words |
+| `cropMarker` | String | `"…"` | String marking crop boundaries |
+| `attributesToHighlight` | Array of strings | `null` | Highlight matching terms contained in an attribute |
+| `highlightPreTag` | String | `"<em>"` | String inserted at the start of a highlighted term |
+| `highlightPostTag` | String | `"</em>"` | String inserted at the end of a highlighted term |
+| `showMatchesPosition` | Boolean | `false` | Return matching terms location |
+| `sort` | Array of strings | `null` | Sort search results by an attribute's value |
+| `matchingStrategy` | String | `last` | Strategy used to match query terms within documents |
+| `showRankingScore` | Boolean | `false` | Display the global ranking score of a document |
+| `showRankingScoreDetails` | Boolean | `false` | Adds a detailed global ranking score field |
+| `rankingScoreThreshold` | Number | `null` | Excludes results with low ranking scores |
+| `attributesToSearchOn` | Array of strings | `["*"]` | Restrict search to the specified attributes |
+| `hybrid` | Object | `null` | Return results based on query keywords and meaning (requires `embedder` and `semanticRatio`) |
+| `vector` | Array of numbers | `null` | Search using a custom query vector |
+| `retrieveVectors` | Boolean | `false` | Return document and query vector data |
+| `locales` | Array of strings | `null` | Explicitly specify languages used in a query |
+| `media` | Object | `null` | Perform AI-powered search queries with multimodal content (experimental) |
+
+**Examples with advanced parameters:**
+
+Hybrid search (semantic + keyword):
+```bash
+curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search' \
+--header 'Content-Type: application/json' \
+--data '{
+    "q": "kitchen utensils",
+    "hybrid": {
+        "semanticRatio": 0.9,
+        "embedder": "EMBEDDER_NAME"
+    }
+}'
+```
+
+Vector search:
+```bash
+curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search' \
+--header 'Content-Type: application/json' \
+--data '{
+    "vector": [0.1, 0.2, 0.3],
+    "hybrid": {
+        "embedder": "EMBEDDER_NAME"
+    }
+}'
+```
+
+Search with locales:
+```bash
+curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search' \
+--header 'Content-Type: application/json' \
+--data '{
+    "q": "進撃の巨人",
+    "locales": ["jpn"]
+}'
+```
+
+For complete parameter documentation, see the [Meilisearch Search API Reference](https://www.meilisearch.com/docs/reference/api/search#search-parameters).
 
 ## Configuration
 
