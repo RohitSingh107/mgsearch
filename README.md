@@ -1,59 +1,102 @@
-# MGSearch - Meilisearch Proxy Service
+# MGSearch – Shopify-native search backend
 
-A Go-based backend service that acts as a proxy between clients and Meilisearch, forwarding search requests and returning results.
+MGSearch is a Go microservice that onboards Shopify merchants, syncs products into Meilisearch, and exposes both admin and storefront search APIs. It ships with a reproducible Nix-based developer environment that provisions Postgres, Redis, and Meilisearch locally.
 
-## Project Structure
+## Quick start (Nix)
 
-```
-mgsearch/
-├── main.go              # Application entry point
-├── config/              # Configuration management
-│   └── config.go
-├── handlers/            # HTTP request handlers
-│   └── search.go
-├── services/            # Business logic and external service clients
-│   └── meilisearch.go
-├── models/              # Data models
-│   └── search.go
-├── go.mod
-├── go.sum
-└── README.md
-```
+1. **Enter the dev shell (installs Go, Postgres, Redis, Meilisearch, etc.):**
 
-## Setup
-
-1. **Install dependencies:**
    ```bash
-   go mod tidy
+   nix --extra-experimental-features 'nix-command flakes' develop
    ```
 
-2. **Set environment variables:**
-   
-   The application automatically loads environment variables from a `.env` file if it exists. Create a `.env` file in the project root:
-   ```bash
-   # .env file
-   MEILISEARCH_URL=https://ms-4a594f30ff0a-34895.sgp.meilisearch.io
-   MEILISEARCH_API_KEY=my_secret_master_key
-   PORT=8080  # Optional, defaults to 8080
-   ```
-   
-   Alternatively, you can set environment variables directly:
-   ```bash
-   export MEILISEARCH_URL=https://ms-4a594f30ff0a-34895.sgp.meilisearch.io
-   export MEILISEARCH_API_KEY=my_secret_master_key
-   export PORT=8080
-   ```
-   
-   **Note:** Environment variables take precedence over `.env` file values.
+   The shell exports sane defaults such as:
 
-3. **Run the server:**
+   - `DATABASE_URL=postgres://mgsearch:mgsearch@localhost:5544/mgsearch?sslmode=disable`
+   - `REDIS_URL=redis://127.0.0.1:6381/0`
+   - `MEILISEARCH_URL=http://127.0.0.1:7701`
+   - `MEILISEARCH_API_KEY=dev-master-key`
+
+2. **Start local services (Postgres & Redis only):**
+
+   ```bash
+   just dev-up
+   ```
+
+   - Postgres listens on `5544`
+   - Redis listens on `6381`
+
+   Stop them with `just dev-down` and inspect status via `just dev-status`.
+
+3. **Configure your Meilisearch Cloud host**
+
+   Set `MEILISEARCH_URL` / `MEILISEARCH_API_KEY` in `.env` to point at your managed Meilisearch instance (we no longer run Meilisearch locally).
+
+4. **Run the API server:**
+
    ```bash
    go run main.go
    ```
 
+   Database schema migrations run automatically on boot.
+
+4. **Run tests/linting as needed:**
+
+   ```bash
+   just fmt
+   just lint
+   just test
+   ```
+
+### Without Nix
+
+Install Go 1.23+, Postgres 16+, and Redis 7+ manually, then point `MEILISEARCH_URL` / `MEILISEARCH_API_KEY` at your hosted Meilisearch deployment before running the service.
+
+## Configuration
+
+The service reads environment variables directly or from a `.env` file. Important keys:
+
+| Variable | Description |
+| --- | --- |
+| `MEILISEARCH_URL` | Meilisearch host (default comes from dev shell) |
+| `MEILISEARCH_API_KEY` | Admin key for Meilisearch |
+| `DATABASE_URL` | Postgres connection string |
+| `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | Shopify app credentials |
+| `SHOPIFY_APP_URL` | Public URL where Shopify redirects after OAuth |
+| `SHOPIFY_SCOPES` | Requested scopes (default defined in config) |
+| `JWT_SIGNING_KEY` | 32-byte hex key for signing dashboard sessions |
+| `ENCRYPTION_KEY` | 32-byte hex key for encrypting Shopify tokens |
+
+> Tip: copy `env.example` to `.env` and adjust values for local development.
+
+## Remix Frontend Integration
+
+This backend is designed to work with a Remix frontend (created with Shopify CLI). The Remix app handles the OAuth UI flow, while this backend stores encrypted tokens, manages search indexes, and handles webhooks.
+
+### Quick Start
+
+1. **See integration guide**: [`docs/REMIX_INTEGRATION.md`](docs/REMIX_INTEGRATION.md) for complete implementation steps
+2. **Quick checklist**: [`docs/REMIX_QUICKSTART.md`](docs/REMIX_QUICKSTART.md) for a step-by-step setup
+
+### Integration Overview
+
+- **Remix Frontend**: Handles OAuth UI, merchant dashboard, theme integration
+- **Go Backend**: Stores tokens, syncs products, handles webhooks, provides search APIs
+- **Communication**: Remix → Go backend via REST API with JWT session tokens
+
+### Key Integration Points
+
+1. **OAuth Flow**: Remix initiates OAuth, Go backend handles token exchange and storage
+2. **Dashboard**: Remix calls `GET /api/stores/current` to display store info
+3. **Storefront Search**: Theme JavaScript calls `GET /api/v1/search` with storefront API key
+
 ## API Endpoints
 
-### Health Check
+**📖 Complete API Documentation:** See [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) for detailed endpoint documentation, request/response formats, examples, and use cases.
+
+### Quick Reference
+
+#### Health Check
 ```
 GET /ping
 ```
@@ -175,9 +218,25 @@ curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search
 
 For complete parameter documentation, see the [Meilisearch Search API Reference](https://www.meilisearch.com/docs/reference/api/search#search-parameters).
 
-## Configuration
+### All Endpoints Summary
 
-- `MEILISEARCH_URL`: Your Meilisearch instance URL (required)
-- `MEILISEARCH_API_KEY`: Your Meilisearch API key (required)
-- `PORT`: Server port (default: 8080)
+| Method | Endpoint | Auth | Use Case |
+|--------|----------|------|----------|
+| `GET` | `/ping` | None | Health check |
+| `POST` | `/api/auth/shopify/begin` | None | Initiate OAuth flow |
+| `GET` | `/api/auth/shopify/callback` | HMAC | Handle OAuth callback (backend-handled) |
+| `POST` | `/api/auth/shopify/exchange` | None | Exchange OAuth code for token (optional helper) |
+| `POST` | `/api/auth/shopify/install` | None | Store OAuth data (frontend-handled OAuth) |
+| `GET` | `/api/stores/current` | JWT | Get authenticated store info |
+| `GET` | `/api/stores/sync-status` | JWT | Get sync status (optimized for polling) |
+| `POST` | `/api/sessions` | None | Store Shopify OAuth session |
+| `GET` | `/api/sessions/:id` | None | Load session by ID |
+| `DELETE` | `/api/sessions/:id` | None | Delete session by ID |
+| `DELETE` | `/api/sessions/batch` | None | Delete multiple sessions |
+| `GET` | `/api/v1/search` | Storefront Key | Public storefront search |
+| `POST` | `/webhooks/shopify/:topic/:subtopic` | HMAC | Receive Shopify webhooks |
+| `POST` | `/api/v1/clients/:client/:index/search` | None | Legacy search (backward compat) |
+| `POST` | `/api/v1/clients/:client/:index/documents` | None | Legacy indexing (backward compat) |
+
+**See [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) for complete documentation with examples.**
 

@@ -1,58 +1,133 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"mgsearch/config"
 	"mgsearch/handlers"
+	"mgsearch/middleware"
+	"mgsearch/pkg/database"
+	"mgsearch/repositories"
 	"mgsearch/services"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// Load configuration
 	cfg := config.LoadConfig()
 
-	// Validate required configuration
-	if cfg.MeilisearchURL == "" {
-		log.Fatal("MEILISEARCH_URL environment variable is required")
+	validateConfig(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	pool, err := database.NewPool(ctx, cfg)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
 	}
-	if cfg.MeilisearchAPIKey == "" {
-		log.Fatal("MEILISEARCH_API_KEY environment variable is required")
+	defer pool.Close()
+
+	if err := database.Ping(ctx, pool); err != nil {
+		log.Fatalf("database unreachable: %v", err)
 	}
 
-	// Initialize services
-	meilisearchService := services.NewMeilisearchService(cfg)
+	if err := database.RunMigrations(ctx, pool); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
 
-	// Initialize handlers
-	searchHandler := handlers.NewSearchHandler(meilisearchService)
+	storeRepo := repositories.NewStoreRepository(pool)
+	sessionRepo := repositories.NewSessionRepository(pool)
+	meiliService := services.NewMeilisearchService(cfg)
+	shopifyService := services.NewShopifyService(cfg)
 
-	// Create Gin router
-	r := gin.Default()
+	authHandler, err := handlers.NewAuthHandler(cfg, shopifyService, storeRepo, meiliService)
+	if err != nil {
+		log.Fatalf("failed to initialize auth handler: %v", err)
+	}
+	storeHandler := handlers.NewStoreHandler(storeRepo)
+	sessionHandler, err := handlers.NewSessionHandler(sessionRepo, storeRepo, meiliService, cfg)
+	if err != nil {
+		log.Fatalf("failed to initialize session handler: %v", err)
+	}
+	webhookHandler := handlers.NewWebhookHandler(shopifyService, storeRepo, meiliService)
+	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService)
+	searchHandler := handlers.NewSearchHandler(meiliService)
+	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSigningKey)
 
-	// Health check endpoint
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
+	router := gin.Default()
+
+	// Add CORS middleware for storefront requests
+	router.Use(middleware.CORSMiddleware())
+
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
-	// API v1 routes
-	v1 := r.Group("/api/v1")
+	api := router.Group("/api")
 	{
-		// Search endpoint
-		// POST /api/v1/clients/:client_name/:index_name/search
-		// Example: POST /api/v1/clients/myclient/test_index/search
-		// Body: { "q": "search query" }
-		v1.POST("/clients/:client_name/:index_name/search", searchHandler.Search)
+		shopifyGroup := api.Group("/auth/shopify")
+		{
+			shopifyGroup.POST("/begin", authHandler.Begin)
+			shopifyGroup.GET("/callback", authHandler.Callback)
+			shopifyGroup.POST("/exchange", authHandler.ExchangeToken)
+			shopifyGroup.POST("/install", authHandler.InstallStore)
+		}
+
+		storeGroup := api.Group("/stores")
+		storeGroup.Use(authMiddleware.RequireStoreSession())
+		{
+			storeGroup.GET("/current", storeHandler.GetCurrentStore)
+			storeGroup.GET("/sync-status", storeHandler.GetSyncStatus)
+		}
+
+		sessionGroup := api.Group("/sessions")
+		sessionGroup.Use(middleware.OptionalAPIKeyMiddleware(cfg.SessionAPIKey))
+		{
+			sessionGroup.POST("", sessionHandler.StoreSession)
+			sessionGroup.GET("/:id", sessionHandler.LoadSession)
+			sessionGroup.DELETE("/:id", sessionHandler.DeleteSession)
+			sessionGroup.DELETE("/batch", sessionHandler.DeleteMultipleSessions)
+			sessionGroup.GET("/shop/:shop", sessionHandler.FindSessionsByShop)
+		}
 	}
 
-	// Start server
+	router.POST("/webhooks/shopify/:topic/:subtopic", webhookHandler.HandleShopifyWebhook)
+
+	v1 := router.Group("/api/v1")
+	{
+		v1.GET("/search", storefrontHandler.Search)
+		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
+		v1.POST("/clients/:client_name/:index_name/search", searchHandler.Search)
+		v1.POST("/clients/:client_name/:index_name/documents", searchHandler.IndexDocument)
+	}
+
 	addr := ":" + cfg.ServerPort
 	log.Printf("Server starting on %s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	if err := router.Run(addr); err != nil {
+		log.Fatalf("failed to start server: %v", err)
+	}
+}
+
+func validateConfig(cfg *config.Config) {
+	if cfg.MeilisearchURL == "" {
+		log.Fatal("MEILISEARCH_URL is required")
+	}
+	if cfg.MeilisearchAPIKey == "" {
+		log.Fatal("MEILISEARCH_API_KEY is required")
+	}
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	if cfg.ShopifyAPIKey == "" || cfg.ShopifyAPISecret == "" || cfg.ShopifyAppURL == "" {
+		log.Fatal("SHOPIFY_API_KEY, SHOPIFY_API_SECRET, and SHOPIFY_APP_URL are required")
+	}
+	if cfg.JWTSigningKey == "" {
+		log.Fatal("JWT_SIGNING_KEY is required")
+	}
+	if cfg.EncryptionKey == "" {
+		log.Fatal("ENCRYPTION_KEY is required (32-byte hex string)")
 	}
 }

@@ -1,3 +1,13 @@
+.env
+!.env.example
+.direnv/
+.dev/
+result
+node_modules/
+dist/
+*.log
+*.local
+coverage/
 # Binaries
 mgsearch
 *.exe
