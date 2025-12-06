@@ -33,3 +33,7 @@ go.work
 .DS_Store
 Thumbs.db
 
+node_modules/
+.devenv
+.env
+.devenv.flake.nix
