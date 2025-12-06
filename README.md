@@ -63,6 +63,16 @@ GET /ping
 POST /api/v1/clients/:client_name/:index_name/search
 ```
 
+### Update Settings
+```
+PATCH /api/v1/clients/:client_name/:index_name/settings
+```
+
+### Get Task Details
+```
+GET /api/v1/clients/:client_name/tasks/:task_id
+```
+
 The request body can contain **any valid Meilisearch search parameters** with **multi-level nested JSON structures**. The service forwards the entire request body to Meilisearch as-is.
 
 **Examples:**
@@ -174,6 +184,149 @@ curl --location 'http://localhost:8080/api/v1/clients/myclient/test_index/search
 ```
 
 For complete parameter documentation, see the [Meilisearch Search API Reference](https://www.meilisearch.com/docs/reference/api/search#search-parameters).
+
+The request body can contain **any valid Meilisearch index settings parameters** with **multi-level nested JSON structures**. The service forwards the entire request body to Meilisearch as-is.
+
+**Example:**
+```bash
+curl --location --request PATCH 'http://localhost:8080/api/v1/clients/myclient/movies/settings' \
+--header 'Content-Type: application/json' \
+--data '{
+    "rankingRules": [
+        "words",
+        "typo",
+        "proximity",
+        "attribute",
+        "sort",
+        "exactness",
+        "release_date:desc",
+        "rank:desc"
+    ],
+    "distinctAttribute": "movie_id",
+    "searchableAttributes": [
+        "title",
+        "overview",
+        "genres"
+    ],
+    "displayedAttributes": [
+        "title",
+        "overview",
+        "genres",
+        "release_date"
+    ],
+    "stopWords": [
+        "the",
+        "a",
+        "an"
+    ],
+    "sortableAttributes": [
+        "title",
+        "release_date"
+    ],
+    "synonyms": {
+        "wolverine": ["xmen", "logan"],
+        "logan": ["wolverine"]
+    },
+    "typoTolerance": {
+        "minWordSizeForTypos": {
+            "oneTypo": 8,
+            "twoTypos": 10
+        },
+        "disableOnAttributes": ["title"]
+    },
+    "pagination": {
+        "maxTotalHits": 5000
+    },
+    "faceting": {
+        "maxValuesPerFacet": 200
+    },
+    "searchCutoffMs": 150
+}'
+```
+
+**Supported Settings Parameters:**
+
+The service accepts all valid Meilisearch index settings parameters including:
+- `rankingRules` - Array of strings defining the ranking order
+- `distinctAttribute` - String specifying the distinct attribute
+- `searchableAttributes` - Array of strings defining searchable attributes
+- `displayedAttributes` - Array of strings defining displayed attributes
+- `stopWords` - Array of strings defining stop words
+- `sortableAttributes` - Array of strings defining sortable attributes
+- `synonyms` - Object mapping terms to their synonyms
+- `typoTolerance` - Object configuring typo tolerance settings
+- `pagination` - Object configuring pagination settings
+- `faceting` - Object configuring faceting settings
+- `searchCutoffMs` - Number specifying search cutoff time in milliseconds
+- And any other Meilisearch index settings parameters, including nested JSON structures
+
+For complete settings documentation, see the [Meilisearch Settings API Reference](https://www.meilisearch.com/docs/reference/api/settings).
+
+Retrieves task details from Meilisearch by task UID. This is useful for checking the status of asynchronous operations like settings updates.
+
+**Example:**
+```bash
+curl --location 'http://localhost:8080/api/v1/clients/myclient/tasks/15' \
+--header 'Content-Type: application/json'
+```
+
+**Response:**
+The response includes task details such as:
+- `uid` - Task UID
+- `indexUid` - Index UID associated with the task
+- `status` - Task status (enqueued, processing, succeeded, failed)
+- `type` - Task type (e.g., "settingsUpdate")
+- `details` - Task details (varies by task type)
+- `error` - Error information if the task failed
+- `duration` - Task execution duration
+- `enqueuedAt` - When the task was enqueued
+- `startedAt` - When the task started processing
+- `finishedAt` - When the task finished
+
+**Example Response:**
+```json
+{
+    "uid": 15,
+    "batchUid": 13,
+    "indexUid": "test_index",
+    "status": "succeeded",
+    "type": "settingsUpdate",
+    "canceledBy": null,
+    "details": {
+        "displayedAttributes": ["title", "overview", "genres", "release_date"],
+        "searchableAttributes": ["title", "overview", "genres"],
+        "sortableAttributes": ["release_date", "title"],
+        "rankingRules": ["words", "typo", "proximity", "attribute", "sort", "exactness", "release_date:desc", "rank:desc"],
+        "stopWords": ["a", "an", "the"],
+        "synonyms": {
+            "logan": ["wolverine"],
+            "wolverine": ["xmen", "logan"]
+        },
+        "distinctAttribute": "movie_id",
+        "typoTolerance": {
+            "minWordSizeForTypos": {
+                "oneTypo": 8,
+                "twoTypos": 10
+            },
+            "disableOnAttributes": ["title"]
+        },
+        "faceting": {
+            "maxValuesPerFacet": 200
+        },
+        "pagination": {
+            "maxTotalHits": 5000
+        },
+        "searchCutoffMs": 150
+    },
+    "error": null,
+    "duration": "PT9.752253947S",
+    "enqueuedAt": "2025-11-22T16:35:16.14171112Z",
+    "startedAt": "2025-11-22T16:35:16.158978866Z",
+    "finishedAt": "2025-11-22T16:35:25.911232813Z"
+}
+```
+
+**Note:** When you update settings, Meilisearch returns a task response with `taskUid`. You can use that `taskUid` with this endpoint to check the status and get the final result of the settings update.
 
 ## Configuration
 

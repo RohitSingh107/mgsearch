@@ -28,6 +28,8 @@ func main() {
 
 	// Initialize handlers
 	searchHandler := handlers.NewSearchHandler(meilisearchService)
+	settingsHandler := handlers.NewSettingsHandler(meilisearchService)
+	tasksHandler := handlers.NewTasksHandler(meilisearchService)
 
 	// Create Gin router
 	r := gin.Default()
@@ -47,6 +49,17 @@ func main() {
 		// Example: POST /api/v1/clients/myclient/test_index/search
 		// Body: { "q": "search query" }
 		v1.POST("/clients/:client_name/:index_name/search", searchHandler.Search)
+
+		// Settings endpoint
+		// PATCH /api/v1/clients/:client_name/:index_name/settings
+		// Example: PATCH /api/v1/clients/myclient/movies/settings
+		// Body: { "rankingRules": [...], "searchableAttributes": [...], ... }
+		v1.PATCH("/clients/:client_name/:index_name/settings", settingsHandler.UpdateSettings)
+
+		// Tasks endpoint
+		// GET /api/v1/clients/:client_name/tasks/:task_id
+		// Example: GET /api/v1/clients/myclient/tasks/15
+		v1.GET("/clients/:client_name/tasks/:task_id", tasksHandler.GetTask)
 	}
 
 	// Start server
