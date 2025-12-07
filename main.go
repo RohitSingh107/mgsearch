@@ -38,6 +38,16 @@ func main() {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
+	// Initialize services
+	meilisearchService := services.NewMeilisearchService(cfg)
+
+	// Initialize handlers
+	searchHandler := handlers.NewSearchHandler(meilisearchService)
+	settingsHandler := handlers.NewSettingsHandler(meilisearchService)
+	tasksHandler := handlers.NewTasksHandler(meilisearchService)
+
+	// Create Gin router
+	r := gin.Default()
 	storeRepo := repositories.NewStoreRepository(pool)
 	sessionRepo := repositories.NewSessionRepository(pool)
 	meiliService := services.NewMeilisearchService(cfg)
@@ -102,6 +112,17 @@ func main() {
 		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
 		v1.POST("/clients/:client_name/:index_name/search", searchHandler.Search)
 		v1.POST("/clients/:client_name/:index_name/documents", searchHandler.IndexDocument)
+
+		// Settings endpoint
+		// PATCH /api/v1/clients/:client_name/:index_name/settings
+		// Example: PATCH /api/v1/clients/myclient/movies/settings
+		// Body: { "rankingRules": [...], "searchableAttributes": [...], ... }
+		v1.PATCH("/clients/:client_name/:index_name/settings", settingsHandler.UpdateSettings)
+
+		// Tasks endpoint
+		// GET /api/v1/clients/:client_name/tasks/:task_id
+		// Example: GET /api/v1/clients/myclient/tasks/15
+		v1.GET("/clients/:client_name/tasks/:task_id", tasksHandler.GetTask)
 	}
 
 	addr := ":" + cfg.ServerPort
