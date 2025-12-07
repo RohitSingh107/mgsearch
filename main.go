@@ -88,6 +88,10 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
+	})
+
 	api := router.Group("/api")
 	{
 		shopifyGroup := api.Group("/auth/shopify")

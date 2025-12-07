@@ -29,7 +29,7 @@
     DATABASE_URL = "mongodb://${config.services.mongodb.initDatabaseUsername}:${config.services.mongodb.initDatabasePassword}@127.0.0.1:27017/mgsearch";
     #DATABASE_URL = "mongodb://127.0.0.1:27017/mgsearch";
   };
-  # packages = with pkgs;  [];
+  #packages = with pkgs;  [];
 
 
   # See full reference at https://devenv.sh/reference/options/
