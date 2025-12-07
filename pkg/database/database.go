@@ -7,39 +7,43 @@ import (
 
 	"mgsearch/config"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// NewPool initializes a pgx connection pool using application configuration.
-func NewPool(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
+// NewClient initializes a MongoDB client using application configuration.
+func NewClient(ctx context.Context, cfg *config.Config) (*mongo.Client, error) {
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
-	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse database url: %w", err)
-	}
+	clientOptions := options.Client().ApplyURI(cfg.DatabaseURL)
 
 	if cfg.DatabaseMaxConns > 0 {
-		poolConfig.MaxConns = cfg.DatabaseMaxConns
+		maxPoolSize := uint64(cfg.DatabaseMaxConns)
+		clientOptions.SetMaxPoolSize(maxPoolSize)
 	}
 
-	poolConfig.MaxConnIdleTime = 5 * time.Minute
-	poolConfig.MaxConnLifetime = 1 * time.Hour
+	clientOptions.SetMaxConnIdleTime(5 * time.Minute)
+	clientOptions.SetMaxConnecting(10)
 
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create database pool: %w", err)
+		return nil, fmt.Errorf("failed to create MongoDB client: %w", err)
 	}
 
-	return pool, nil
+	return client, nil
 }
 
 // Ping ensures the database connection is healthy.
-func Ping(ctx context.Context, pool *pgxpool.Pool) error {
-	if err := pool.Ping(ctx); err != nil {
+func Ping(ctx context.Context, client *mongo.Client) error {
+	if err := client.Ping(ctx, nil); err != nil {
 		return fmt.Errorf("database ping failed: %w", err)
 	}
 	return nil
+}
+
+// GetDatabase returns the database instance from the client.
+func GetDatabase(client *mongo.Client, dbName string) *mongo.Database {
+	return client.Database(dbName)
 }

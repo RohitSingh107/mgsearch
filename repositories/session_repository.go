@@ -4,112 +4,73 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"mgsearch/models"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type SessionRepository struct {
-	pool *pgxpool.Pool
+	collection *mongo.Collection
 }
 
-func NewSessionRepository(pool *pgxpool.Pool) *SessionRepository {
-	return &SessionRepository{pool: pool}
-}
-
-func (r *SessionRepository) scanSession(row pgx.Row) (*models.Session, error) {
-	session := &models.Session{}
-	err := row.Scan(
-		&session.ID,
-		&session.Shop,
-		&session.State,
-		&session.IsOnline,
-		&session.Scope,
-		&session.Expires,
-		&session.AccessToken,
-		&session.UserID,
-		&session.FirstName,
-		&session.LastName,
-		&session.Email,
-		&session.AccountOwner,
-		&session.Locale,
-		&session.Collaborator,
-		&session.EmailVerified,
-		&session.CreatedAt,
-		&session.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return session, nil
+func NewSessionRepository(db *mongo.Database) *SessionRepository {
+	return &SessionRepository{collection: db.Collection("sessions")}
 }
 
 func (r *SessionRepository) CreateOrUpdate(ctx context.Context, session *models.Session) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO sessions (
-			id, shop, state, is_online, scope, expires, access_token,
-			user_id, first_name, last_name, email, account_owner,
-			locale, collaborator, email_verified, created_at, updated_at
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
-		ON CONFLICT (id) DO UPDATE SET
-			shop = EXCLUDED.shop,
-			state = EXCLUDED.state,
-			is_online = EXCLUDED.is_online,
-			scope = EXCLUDED.scope,
-			expires = EXCLUDED.expires,
-			access_token = EXCLUDED.access_token,
-			user_id = EXCLUDED.user_id,
-			first_name = EXCLUDED.first_name,
-			last_name = EXCLUDED.last_name,
-			email = EXCLUDED.email,
-			account_owner = EXCLUDED.account_owner,
-			locale = EXCLUDED.locale,
-			collaborator = EXCLUDED.collaborator,
-			email_verified = EXCLUDED.email_verified,
-			updated_at = NOW()
-	`,
-		session.ID,
-		session.Shop,
-		session.State,
-		session.IsOnline,
-		session.Scope,
-		session.Expires,
-		session.AccessToken,
-		session.UserID,
-		session.FirstName,
-		session.LastName,
-		session.Email,
-		session.AccountOwner,
-		session.Locale,
-		session.Collaborator,
-		session.EmailVerified,
-	)
+	now := time.Now()
+	if session.CreatedAt.IsZero() {
+		session.CreatedAt = now
+	}
+	session.UpdatedAt = now
+
+	opts := options.Update().SetUpsert(true)
+	filter := bson.M{"_id": session.ID}
+	update := bson.M{
+		"$set": bson.M{
+			"shop":           session.Shop,
+			"state":          session.State,
+			"is_online":      session.IsOnline,
+			"scope":          session.Scope,
+			"expires":        session.Expires,
+			"access_token":   session.AccessToken,
+			"user_id":        session.UserID,
+			"first_name":     session.FirstName,
+			"last_name":      session.LastName,
+			"email":          session.Email,
+			"account_owner":  session.AccountOwner,
+			"locale":         session.Locale,
+			"collaborator":   session.Collaborator,
+			"email_verified": session.EmailVerified,
+			"updated_at":     session.UpdatedAt,
+		},
+		"$setOnInsert": bson.M{
+			"created_at": session.CreatedAt,
+		},
+	}
+
+	_, err := r.collection.UpdateOne(ctx, filter, update, opts)
 	return err
 }
 
 func (r *SessionRepository) GetByID(ctx context.Context, id string) (*models.Session, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, shop, state, is_online, scope, expires, access_token,
-		       user_id, first_name, last_name, email, account_owner,
-		       locale, collaborator, email_verified, created_at, updated_at
-		FROM sessions WHERE id = $1
-	`, id)
-
-	session, err := r.scanSession(row)
+	var session models.Session
+	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&session)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, errors.New("session not found")
 		}
 		return nil, err
 	}
-	return session, nil
+	return &session, nil
 }
 
 func (r *SessionRepository) DeleteByID(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id)
+	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
 	return err
 }
 
@@ -118,35 +79,32 @@ func (r *SessionRepository) DeleteByIDs(ctx context.Context, ids []string) error
 		return nil
 	}
 
-	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE id = ANY($1)`, ids)
+	filter := bson.M{"_id": bson.M{"$in": ids}}
+	_, err := r.collection.DeleteMany(ctx, filter)
 	return err
 }
 
 func (r *SessionRepository) DeleteExpired(ctx context.Context) error {
-	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE expires < NOW()`)
+	now := time.Now()
+	filter := bson.M{"expires": bson.M{"$lt": now}}
+	_, err := r.collection.DeleteMany(ctx, filter)
 	return err
 }
 
 func (r *SessionRepository) GetByShop(ctx context.Context, shop string) ([]*models.Session, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, shop, state, is_online, scope, expires, access_token,
-		       user_id, first_name, last_name, email, account_owner,
-		       locale, collaborator, email_verified, created_at, updated_at
-		FROM sessions WHERE shop = $1 ORDER BY created_at DESC
-	`, shop)
+	filter := bson.M{"shop": shop}
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query sessions: %w", err)
 	}
-	defer rows.Close()
+	defer cursor.Close(ctx)
 
 	var sessions []*models.Session
-	for rows.Next() {
-		session, err := r.scanSession(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan session: %w", err)
-		}
-		sessions = append(sessions, session)
+	if err := cursor.All(ctx, &sessions); err != nil {
+		return nil, fmt.Errorf("failed to decode sessions: %w", err)
 	}
 
-	return sessions, rows.Err()
+	return sessions, nil
 }

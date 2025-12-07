@@ -48,7 +48,7 @@ func (h *StoreHandler) GetSyncStatus(c *gin.Context) {
 
 	// Return sync status with minimal store info
 	c.JSON(http.StatusOK, gin.H{
-		"store_id":     store.ID,
+		"store_id":     store.ID.Hex(),
 		"shop_domain":  store.ShopDomain,
 		"sync_state":   store.SyncState,
 		"index_uid":    store.IndexUID(),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"mgsearch/config"
@@ -24,32 +25,41 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := database.NewPool(ctx, cfg)
+	client, err := database.NewClient(ctx, cfg)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	defer pool.Close()
+	defer func() {
+		if err := client.Disconnect(ctx); err != nil {
+			log.Printf("failed to disconnect from database: %v", err)
+		}
+	}()
 
-	if err := database.Ping(ctx, pool); err != nil {
+	if err := database.Ping(ctx, client); err != nil {
 		log.Fatalf("database unreachable: %v", err)
 	}
 
-	if err := database.RunMigrations(ctx, pool); err != nil {
+	// Extract database name from connection string or use default
+	dbName := "mgsearch"
+	if cfg.DatabaseURL != "" {
+		// Try to extract database name from MongoDB URI
+		// Format: mongodb://host:port/dbname
+		if idx := strings.LastIndex(cfg.DatabaseURL, "/"); idx != -1 && idx < len(cfg.DatabaseURL)-1 {
+			if queryIdx := strings.Index(cfg.DatabaseURL[idx+1:], "?"); queryIdx != -1 {
+				dbName = cfg.DatabaseURL[idx+1 : idx+1+queryIdx]
+			} else {
+				dbName = cfg.DatabaseURL[idx+1:]
+			}
+		}
+	}
+
+	if err := database.RunMigrations(ctx, client, dbName); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Initialize services
-	meilisearchService := services.NewMeilisearchService(cfg)
-
-	// Initialize handlers
-	searchHandler := handlers.NewSearchHandler(meilisearchService)
-	settingsHandler := handlers.NewSettingsHandler(meilisearchService)
-	tasksHandler := handlers.NewTasksHandler(meilisearchService)
-
-	// Create Gin router
-	r := gin.Default()
-	storeRepo := repositories.NewStoreRepository(pool)
-	sessionRepo := repositories.NewSessionRepository(pool)
+	db := database.GetDatabase(client, dbName)
+	storeRepo := repositories.NewStoreRepository(db)
+	sessionRepo := repositories.NewSessionRepository(db)
 	meiliService := services.NewMeilisearchService(cfg)
 	shopifyService := services.NewShopifyService(cfg)
 
@@ -65,6 +75,8 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(shopifyService, storeRepo, meiliService)
 	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService)
 	searchHandler := handlers.NewSearchHandler(meiliService)
+	settingsHandler := handlers.NewSettingsHandler(meiliService)
+	tasksHandler := handlers.NewTasksHandler(meiliService)
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSigningKey)
 
 	router := gin.Default()

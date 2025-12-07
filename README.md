@@ -1,10 +1,17 @@
 # MGSearch – Shopify-native search backend
 
-MGSearch is a Go microservice that onboards Shopify merchants, syncs products into Meilisearch, and exposes both admin and storefront search APIs. It ships with a reproducible Nix-based developer environment that provisions Postgres, Redis, and Meilisearch locally.
+MGSearch is a Go microservice that onboards Shopify merchants, syncs products into Meilisearch, and exposes both admin and storefront search APIs. It ships with a reproducible Nix-based developer environment that provisions MongoDB, Redis, and Meilisearch locally.
 
 ## Quick start (Nix)
 
-1. **Enter the dev shell (installs Go, Postgres, Redis, Meilisearch, etc.):**
+1. **Install MongoDB** (required, not included in Nix due to build requirements):
+
+   - **Arch/CachyOS**: `sudo pacman -S mongodb`
+   - **Ubuntu/Debian**: `sudo apt install mongodb`
+   - **macOS**: `brew install mongodb-community`
+   - **Or download**: https://www.mongodb.com/try/download/community
+
+2. **Enter the dev shell (installs Go, Redis, Meilisearch, etc.):**
 
    ```bash
    nix --extra-experimental-features 'nix-command flakes' develop
@@ -12,18 +19,18 @@ MGSearch is a Go microservice that onboards Shopify merchants, syncs products in
 
    The shell exports sane defaults such as:
 
-   - `DATABASE_URL=postgres://mgsearch:mgsearch@localhost:5544/mgsearch?sslmode=disable`
+   - `DATABASE_URL=mongodb://localhost:27017/mgsearch`
    - `REDIS_URL=redis://127.0.0.1:6381/0`
    - `MEILISEARCH_URL=http://127.0.0.1:7701`
    - `MEILISEARCH_API_KEY=dev-master-key`
 
-2. **Start local services (Postgres & Redis only):**
+3. **Start local services (MongoDB & Redis only):**
 
    ```bash
    just dev-up
    ```
 
-   - Postgres listens on `5544`
+   - MongoDB listens on `27017`
    - Redis listens on `6381`
 
    Stop them with `just dev-down` and inspect status via `just dev-status`.
@@ -50,7 +57,7 @@ MGSearch is a Go microservice that onboards Shopify merchants, syncs products in
 
 ### Without Nix
 
-Install Go 1.23+, Postgres 16+, and Redis 7+ manually, then point `MEILISEARCH_URL` / `MEILISEARCH_API_KEY` at your hosted Meilisearch deployment before running the service.
+Install Go 1.23+, MongoDB 7+, and Redis 7+ manually, then point `MEILISEARCH_URL` / `MEILISEARCH_API_KEY` at your hosted Meilisearch deployment before running the service.
 
 ## Configuration
 
@@ -60,7 +67,7 @@ The service reads environment variables directly or from a `.env` file. Importan
 | --- | --- |
 | `MEILISEARCH_URL` | Meilisearch host (default comes from dev shell) |
 | `MEILISEARCH_API_KEY` | Admin key for Meilisearch |
-| `DATABASE_URL` | Postgres connection string |
+| `DATABASE_URL` | MongoDB connection string |
 | `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | Shopify app credentials |
 | `SHOPIFY_APP_URL` | Public URL where Shopify redirects after OAuth |
 | `SHOPIFY_SCOPES` | Requested scopes (default defined in config) |

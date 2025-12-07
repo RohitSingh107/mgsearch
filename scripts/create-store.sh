@@ -1,5 +1,5 @@
 #!/bin/bash
-# Create a store with default values for testing
+# Create a store with default values for testing (MongoDB)
 
 if [ -z "$DATABASE_URL" ]; then
     echo "Error: DATABASE_URL not set"
@@ -22,50 +22,53 @@ INDEX_UID="products_$(echo $SHOP_DOMAIN | sed 's/\./_/g')"
 # Get encryption key from env (needed for dummy encrypted token)
 if [ -z "$ENCRYPTION_KEY" ]; then
     echo "Warning: ENCRYPTION_KEY not set, using dummy encrypted token"
-    ENCRYPTED_TOKEN="\\x$(openssl rand -hex 32)"
+    ENCRYPTED_TOKEN_HEX=$(openssl rand -hex 32)
 else
     # For a real token, you'd encrypt it, but for testing we'll use a dummy
-    ENCRYPTED_TOKEN="\\x$(openssl rand -hex 32)"
+    ENCRYPTED_TOKEN_HEX=$(openssl rand -hex 32)
 fi
 
-# Insert store with default values
-psql "$DATABASE_URL" <<EOF
-INSERT INTO stores (
-    shop_domain,
-    shop_name,
-    encrypted_access_token,
-    api_key_public,
-    api_key_private,
-    product_index_uid,
-    meilisearch_index_uid,
-    meilisearch_document_type,
-    meilisearch_url,
-    plan_level,
-    status,
-    webhook_secret,
-    sync_state
-) VALUES (
-    '$SHOP_DOMAIN',
-    '$SHOP_NAME',
-    '$ENCRYPTED_TOKEN',
-    '$PUBLIC_KEY',
-    '$PRIVATE_KEY',
-    '$INDEX_UID',
-    '$INDEX_UID',
-    'product',
-    (SELECT meilisearch_url FROM stores LIMIT 1),
-    'free',
-    'active',
-    '$WEBHOOK_SECRET',
-    '{"status": "pending_initial_sync"}'::jsonb
-)
-ON CONFLICT (shop_domain) DO UPDATE SET
-    shop_name = EXCLUDED.shop_name,
-    updated_at = NOW()
-RETURNING id, shop_domain, api_key_public;
+# Get Meilisearch URL from existing store or use default
+MEILISEARCH_URL=$(mongosh "$DATABASE_URL" --quiet --eval "db.stores.findOne({}, {meilisearch_url: 1})?.meilisearch_url || 'https://your-meilisearch-url.com'")
+
+# Create store document
+mongosh "$DATABASE_URL" --quiet <<EOF
+db.stores.updateOne(
+  {shop_domain: "$SHOP_DOMAIN"},
+  {
+    \$set: {
+      shop_name: "$SHOP_NAME",
+      encrypted_access_token: BinData(0, "$ENCRYPTED_TOKEN_HEX"),
+      api_key_public: "$PUBLIC_KEY",
+      api_key_private: "$PRIVATE_KEY",
+      product_index_uid: "$INDEX_UID",
+      meilisearch_index_uid: "$INDEX_UID",
+      meilisearch_document_type: "product",
+      meilisearch_url: "$MEILISEARCH_URL",
+      plan_level: "free",
+      status: "active",
+      webhook_secret: "$WEBHOOK_SECRET",
+      sync_state: {status: "pending_initial_sync"},
+      updated_at: new Date()
+    },
+    \$setOnInsert: {
+      installed_at: new Date(),
+      created_at: new Date()
+    }
+  },
+  {upsert: true}
+);
 EOF
 
 echo ""
 echo "Store created! Here's your info:"
-psql "$DATABASE_URL" -c "SELECT id, shop_domain, api_key_public FROM stores WHERE shop_domain = '$SHOP_DOMAIN';"
-
+mongosh "$DATABASE_URL" --quiet --eval "
+var store = db.stores.findOne({shop_domain: '$SHOP_DOMAIN'});
+if (store) {
+  print('ID: ' + store._id);
+  print('Shop Domain: ' + store.shop_domain);
+  print('API Key Public: ' + store.api_key_public);
+} else {
+  print('Store not found');
+}
+"

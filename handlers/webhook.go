@@ -94,7 +94,7 @@ func (h *WebhookHandler) handleProductUpsert(store *models.Store, indexUID strin
 
 	document := models.Document(product)
 	document["shop_domain"] = store.ShopDomain
-	document["store_id"] = store.ID
+	document["store_id"] = store.ID.Hex()
 	document["document_type"] = store.DocumentType()
 
 	_, err := h.meili.IndexDocument(indexUID, document)

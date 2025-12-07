@@ -1,9 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"mgsearch/config"
 	"mgsearch/models"
 	"strings"
@@ -12,7 +15,10 @@ import (
 )
 
 type MeilisearchService struct {
-	client meilisearch.ServiceManager
+	client     meilisearch.ServiceManager
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
 }
 
 // NewMeilisearchService creates a new Meilisearch service instance backed by the official SDK
@@ -23,7 +29,10 @@ func NewMeilisearchService(cfg *config.Config) *MeilisearchService {
 	)
 
 	return &MeilisearchService{
-		client: client,
+		client:     client,
+		baseURL:    cfg.MeilisearchURL,
+		apiKey:     cfg.MeilisearchAPIKey,
+		httpClient: &http.Client{},
 	}
 }
 

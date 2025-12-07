@@ -25,19 +25,27 @@
             sqlc
             just
             watchexec
-            postgresql_16
+            mongosh
             redis
             nodejs_20
             yarn
           ];
 
           shellHook = ''
-            export PGPORT=''${PGPORT:-5544}
+            export MONGODB_PORT=''${MONGODB_PORT:-27017}
             export REDIS_PORT=''${REDIS_PORT:-6381}
-            export DATABASE_URL="postgres://mgsearch:mgsearch@localhost:$PGPORT/mgsearch?sslmode=disable"
+            export DATABASE_URL="mongodb://localhost:$MONGODB_PORT/mgsearch"
             export REDIS_URL="redis://127.0.0.1:$REDIS_PORT/0"
 
-            echo "👉 Dev shell ready. Run 'just dev-up' to start Postgres/Redis."
+            if ! command -v mongod >/dev/null 2>&1; then
+              echo "⚠️  MongoDB (mongod) not found. Install MongoDB separately:"
+              echo "   - Arch/CachyOS: sudo pacman -S mongodb"
+              echo "   - Ubuntu/Debian: sudo apt install mongodb"
+              echo "   - macOS: brew install mongodb-community"
+              echo "   - Or download from: https://www.mongodb.com/try/download/community"
+            fi
+
+            echo "👉 Dev shell ready. Run 'just dev-up' to start MongoDB/Redis."
             echo "⚠️  Configure MEILISEARCH_URL / MEILISEARCH_API_KEY for your cloud host in .env"
           '';
         };

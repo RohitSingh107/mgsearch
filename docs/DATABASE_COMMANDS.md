@@ -1,200 +1,179 @@
-# Database Commands - Quick Reference
+# Database Commands - Quick Reference (MongoDB)
 
-## List All Tables
+## List All Collections
 
 ### Quick Script
 ```bash
-./scripts/list-tables.sh
+mongosh $DATABASE_URL --eval "db.getCollectionNames()"
 ```
 
-### Direct SQL
+### Direct Command
 ```bash
-psql $DATABASE_URL -c "\dt"
-```
-
-### List with Details
-```bash
-psql $DATABASE_URL -c "\d+"
+mongosh $DATABASE_URL --eval "show collections"
 ```
 
 ---
 
-## View Table Structure
+## View Collection Structure
 
-### Stores Table
+### Stores Collection
 ```bash
-psql $DATABASE_URL -c "\d stores"
+mongosh $DATABASE_URL --eval "db.stores.findOne()"
 ```
 
-### Sessions Table
+### Sessions Collection
 ```bash
-psql $DATABASE_URL -c "\d sessions"
+mongosh $DATABASE_URL --eval "db.sessions.findOne()"
 ```
 
-### All Tables with Details
+### All Collections with Document Counts
 ```bash
-psql $DATABASE_URL -c "\d+"
+mongosh $DATABASE_URL --eval "
+db.getCollectionNames().forEach(function(collection) {
+    print(collection + ': ' + db[collection].countDocuments());
+});
+"
 ```
 
 ---
 
-## View Table Data
+## View Collection Data
 
 ### All Stores
 ```bash
-psql $DATABASE_URL -c "SELECT id, shop_domain, shop_name, status, installed_at FROM stores;"
+mongosh $DATABASE_URL --eval "db.stores.find({}, {shop_domain: 1, shop_name: 1, status: 1, installed_at: 1}).pretty()"
 ```
 
 ### All Sessions
 ```bash
-psql $DATABASE_URL -c "SELECT id, shop, is_online, expires, created_at FROM sessions;"
+mongosh $DATABASE_URL --eval "db.sessions.find({}, {id: 1, shop: 1, is_online: 1, expires: 1, created_at: 1}).pretty()"
 ```
 
-### Stores with Keys (for getting storefront key)
+### Find Store by Shop Domain
 ```bash
-psql $DATABASE_URL -c "SELECT id, shop_domain, api_key_public FROM stores;"
+mongosh $DATABASE_URL --eval "db.stores.findOne({shop_domain: 'your-shop.myshopify.com'})"
+```
+
+### Find Sessions by Shop
+```bash
+mongosh $DATABASE_URL --eval "db.sessions.find({shop: 'your-shop.myshopify.com'}).pretty()"
 ```
 
 ---
 
-## Row Counts
+## Create/Update Documents
 
-### Count All Tables
+### Create a Store (using mongosh)
+```javascript
+mongosh $DATABASE_URL
+use mgsearch
+db.stores.insertOne({
+  shop_domain: "mg-store-207095.myshopify.com",
+  shop_name: "Mg Store",
+  encrypted_access_token: Buffer.from("dummy_token", "utf8"),
+  api_key_public: "abc123def4567890abcdef1234567890",
+  api_key_private: "private_key_here_32_chars_minimum_required",
+  product_index_uid: "products_mg_store_207095_myshopify_com",
+  meilisearch_index_uid: "products_mg_store_207095_myshopify_com",
+  meilisearch_document_type: "product",
+  meilisearch_url: "https://your-meilisearch-url.com",
+  plan_level: "free",
+  status: "active",
+  webhook_secret: "webhook_secret_here_32_chars_minimum_required",
+  sync_state: {status: "pending_initial_sync"},
+  installed_at: new Date(),
+  created_at: new Date(),
+  updated_at: new Date()
+})
+```
+
+### Update Store
 ```bash
-psql $DATABASE_URL -c "
-SELECT 
-    'stores' as table_name, 
-    COUNT(*) as row_count 
-FROM stores
-UNION ALL
-SELECT 
-    'sessions' as table_name, 
-    COUNT(*) as row_count 
-FROM sessions;
+mongosh $DATABASE_URL --eval "
+db.stores.updateOne(
+  {shop_domain: 'your-shop.myshopify.com'},
+  {\$set: {status: 'active', updated_at: new Date()}}
+)
 "
 ```
 
-### Count Stores
+---
+
+## Delete Documents
+
+### Delete a Store
 ```bash
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM stores;"
+mongosh $DATABASE_URL --eval "db.stores.deleteOne({shop_domain: 'your-shop.myshopify.com'})"
 ```
 
-### Count Sessions
+### Delete Expired Sessions
 ```bash
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM sessions;"
+mongosh $DATABASE_URL --eval "db.sessions.deleteMany({expires: {\$lt: new Date()}})"
 ```
 
 ---
 
-## Useful Queries
+## Indexes
 
-### Get Store by Domain
+### List All Indexes
 ```bash
-psql $DATABASE_URL -c "SELECT * FROM stores WHERE shop_domain = 'mg-store-207095.myshopify.com';"
+mongosh $DATABASE_URL --eval "db.stores.getIndexes()"
+mongosh $DATABASE_URL --eval "db.sessions.getIndexes()"
 ```
 
-### Get Store ID (UUID)
+### Create Index (if needed manually)
 ```bash
-psql $DATABASE_URL -t -c "SELECT id FROM stores WHERE shop_domain = 'mg-store-207095.myshopify.com';"
-```
-
-### Get Storefront Key
-```bash
-psql $DATABASE_URL -t -c "SELECT api_key_public FROM stores WHERE shop_domain = 'mg-store-207095.myshopify.com';"
-```
-
-### Get Sessions for a Shop
-```bash
-psql $DATABASE_URL -c "SELECT * FROM sessions WHERE shop = 'mg-store-207095.myshopify.com';"
+mongosh $DATABASE_URL --eval "db.stores.createIndex({shop_domain: 1}, {unique: true})"
+mongosh $DATABASE_URL --eval "db.stores.createIndex({api_key_public: 1}, {unique: true})"
+mongosh $DATABASE_URL --eval "db.sessions.createIndex({shop: 1})"
+mongosh $DATABASE_URL --eval "db.sessions.createIndex({expires: 1})"
 ```
 
 ---
 
-## Connect to Database
+## Database Statistics
 
-### Using psql
+### Collection Stats
 ```bash
-psql $DATABASE_URL
+mongosh $DATABASE_URL --eval "db.stats()"
 ```
 
-### Interactive Session
+### Store Count
 ```bash
-psql $DATABASE_URL
-# Then you can run SQL commands:
-# \dt          - List tables
-# \d stores    - Describe stores table
-# SELECT * FROM stores;
-# \q           - Quit
+mongosh $DATABASE_URL --eval "db.stores.countDocuments()"
 ```
 
----
-
-## Export Data
-
-### Export Stores to CSV
+### Session Count
 ```bash
-psql $DATABASE_URL -c "COPY (SELECT * FROM stores) TO STDOUT WITH CSV HEADER" > stores.csv
-```
-
-### Export Sessions to CSV
-```bash
-psql $DATABASE_URL -c "COPY (SELECT * FROM sessions) TO STDOUT WITH CSV HEADER" > sessions.csv
+mongosh $DATABASE_URL --eval "db.sessions.countDocuments()"
 ```
 
 ---
 
-## Common psql Commands
+## Backup and Restore
 
-| Command | Description |
-|---------|-------------|
-| `\dt` | List all tables |
-| `\d table_name` | Describe a table structure |
-| `\d+ table_name` | Describe table with more details |
-| `\l` | List all databases |
-| `\c database_name` | Connect to a database |
-| `\q` | Quit psql |
-| `\?` | Show help |
-| `\timing` | Toggle query timing |
-
----
-
-## Quick Check Scripts
-
-### Check if tables exist
+### Export Collection
 ```bash
-psql $DATABASE_URL -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
+mongoexport --uri="$DATABASE_URL" --collection=stores --out=stores.json
+mongoexport --uri="$DATABASE_URL" --collection=sessions --out=sessions.json
 ```
 
-### List all columns in stores table
+### Import Collection
 ```bash
-psql $DATABASE_URL -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'stores';"
-```
-
-### Check indexes
-```bash
-psql $DATABASE_URL -c "\di"
+mongoimport --uri="$DATABASE_URL" --collection=stores --file=stores.json
+mongoimport --uri="$DATABASE_URL" --collection=sessions --file=sessions.json
 ```
 
 ---
 
-## Troubleshooting
+## Connection String Format
 
-### If DATABASE_URL is not set:
-```bash
-# Load from .env
-source .env
-
-# Or set manually
-export DATABASE_URL="postgres://mgsearch:mgsearch@localhost:5544/mgsearch?sslmode=disable"
+The `DATABASE_URL` should be in MongoDB format:
+```
+mongodb://localhost:27017/mgsearch
 ```
 
-### Test connection
-```bash
-psql $DATABASE_URL -c "SELECT version();"
+For authentication:
 ```
-
-### Check if database exists
-```bash
-psql $DATABASE_URL -c "SELECT current_database();"
+mongodb://username:password@localhost:27017/mgsearch
 ```
-

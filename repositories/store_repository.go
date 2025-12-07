@@ -2,175 +2,152 @@ package repositories
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"mgsearch/models"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type StoreRepository struct {
-	pool *pgxpool.Pool
+	collection *mongo.Collection
 }
 
-func NewStoreRepository(pool *pgxpool.Pool) *StoreRepository {
-	return &StoreRepository{pool: pool}
-}
-
-func (r *StoreRepository) scanStore(row pgx.Row) (*models.Store, error) {
-	var syncStateRaw []byte
-	store := &models.Store{}
-
-	err := row.Scan(
-		&store.ID,
-		&store.ShopDomain,
-		&store.ShopName,
-		&store.EncryptedAccessToken,
-		&store.APIKeyPublic,
-		&store.APIKeyPrivate,
-		&store.ProductIndexUID,
-		&store.MeilisearchIndexUID,
-		&store.MeilisearchDocType,
-		&store.MeilisearchURL,
-		&store.MeilisearchAPIKey,
-		&store.PlanLevel,
-		&store.Status,
-		&store.WebhookSecret,
-		&store.InstalledAt,
-		&store.UninstalledAt,
-		&syncStateRaw,
-		&store.CreatedAt,
-		&store.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(syncStateRaw) > 0 {
-		var state map[string]interface{}
-		if err := json.Unmarshal(syncStateRaw, &state); err == nil {
-			store.SyncState = state
-		}
-	} else {
-		store.SyncState = map[string]interface{}{}
-	}
-
-	return store, nil
+func NewStoreRepository(db *mongo.Database) *StoreRepository {
+	return &StoreRepository{collection: db.Collection("stores")}
 }
 
 func (r *StoreRepository) CreateOrUpdate(ctx context.Context, store *models.Store) (*models.Store, error) {
 	if store.SyncState == nil {
 		store.SyncState = map[string]interface{}{}
 	}
-	syncStateJSON, err := json.Marshal(store.SyncState)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal sync state: %w", err)
+
+	now := time.Now()
+	if store.CreatedAt.IsZero() {
+		store.CreatedAt = now
+	}
+	store.UpdatedAt = now
+
+	// Set defaults if not provided
+	if store.MeilisearchDocType == "" {
+		store.MeilisearchDocType = "product"
+	}
+	if store.PlanLevel == "" {
+		store.PlanLevel = "free"
+	}
+	if store.Status == "" {
+		store.Status = "active"
 	}
 
-	row := r.pool.QueryRow(ctx, `
-		INSERT INTO stores (
-			shop_domain,
-			shop_name,
-			encrypted_access_token,
-			api_key_public,
-			api_key_private,
-			product_index_uid,
-			meilisearch_index_uid,
-			meilisearch_document_type,
-			meilisearch_url,
-			meilisearch_api_key,
-			plan_level,
-			status,
-			webhook_secret,
-			installed_at,
-			sync_state
-		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-		ON CONFLICT (shop_domain) DO UPDATE SET
-			shop_name = EXCLUDED.shop_name,
-			encrypted_access_token = EXCLUDED.encrypted_access_token,
-			api_key_public = EXCLUDED.api_key_public,
-			api_key_private = EXCLUDED.api_key_private,
-			product_index_uid = EXCLUDED.product_index_uid,
-			meilisearch_index_uid = EXCLUDED.meilisearch_index_uid,
-			meilisearch_document_type = EXCLUDED.meilisearch_document_type,
-			meilisearch_url = EXCLUDED.meilisearch_url,
-			meilisearch_api_key = EXCLUDED.meilisearch_api_key,
-			plan_level = EXCLUDED.plan_level,
-			status = 'active',
-			webhook_secret = EXCLUDED.webhook_secret,
-			installed_at = EXCLUDED.installed_at,
-			sync_state = EXCLUDED.sync_state,
-			updated_at = NOW()
-		RETURNING
-			id, shop_domain, shop_name, encrypted_access_token, api_key_public,
-			api_key_private, product_index_uid, meilisearch_index_uid, meilisearch_document_type,
-			meilisearch_url, meilisearch_api_key,
-			plan_level, status, webhook_secret,
-			installed_at, uninstalled_at, sync_state, created_at, updated_at
-	`, store.ShopDomain, store.ShopName, store.EncryptedAccessToken, store.APIKeyPublic,
-		store.APIKeyPrivate, store.ProductIndexUID, store.MeilisearchIndexUID, store.MeilisearchDocType,
-		store.MeilisearchURL, store.MeilisearchAPIKey,
-		store.PlanLevel, store.Status,
-		store.WebhookSecret, store.InstalledAt, syncStateJSON,
-	)
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	filter := bson.M{"shop_domain": store.ShopDomain}
+	update := bson.M{
+		"$set": bson.M{
+			"shop_name":                store.ShopName,
+			"encrypted_access_token":   store.EncryptedAccessToken,
+			"api_key_public":           store.APIKeyPublic,
+			"api_key_private":          store.APIKeyPrivate,
+			"product_index_uid":        store.ProductIndexUID,
+			"meilisearch_index_uid":    store.MeilisearchIndexUID,
+			"meilisearch_document_type": store.MeilisearchDocType,
+			"meilisearch_url":          store.MeilisearchURL,
+			"meilisearch_api_key":      store.MeilisearchAPIKey,
+			"plan_level":              store.PlanLevel,
+			"status":                  "active",
+			"webhook_secret":          store.WebhookSecret,
+			"installed_at":            store.InstalledAt,
+			"sync_state":              store.SyncState,
+			"updated_at":              store.UpdatedAt,
+		},
+		"$setOnInsert": bson.M{
+			"created_at": store.CreatedAt,
+		},
+	}
 
-	return r.scanStore(row)
+	var result models.Store
+	err := r.collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&result)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			// If upsert didn't return a document, insert it manually
+			if store.ID.IsZero() {
+				store.ID = primitive.NewObjectID()
+			}
+			_, err = r.collection.InsertOne(ctx, store)
+			if err != nil {
+				return nil, fmt.Errorf("failed to insert store: %w", err)
+			}
+			return store, nil
+		}
+		return nil, fmt.Errorf("failed to create or update store: %w", err)
+	}
+
+	return &result, nil
 }
 
 func (r *StoreRepository) GetByShopDomain(ctx context.Context, domain string) (*models.Store, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, shop_domain, shop_name, encrypted_access_token, api_key_public,
-		       api_key_private, product_index_uid, meilisearch_index_uid, meilisearch_document_type,
-		       meilisearch_url, meilisearch_api_key,
-		       plan_level, status, webhook_secret,
-		       installed_at, uninstalled_at, sync_state, created_at, updated_at
-		FROM stores WHERE shop_domain = $1
-	`, domain)
-
-	return r.scanStore(row)
+	var store models.Store
+	err := r.collection.FindOne(ctx, bson.M{"shop_domain": domain}).Decode(&store)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("store not found")
+		}
+		return nil, err
+	}
+	return &store, nil
 }
 
 func (r *StoreRepository) GetByPublicAPIKey(ctx context.Context, key string) (*models.Store, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, shop_domain, shop_name, encrypted_access_token, api_key_public,
-		       api_key_private, product_index_uid, meilisearch_index_uid, meilisearch_document_type,
-		       meilisearch_url, meilisearch_api_key,
-		       plan_level, status, webhook_secret,
-		       installed_at, uninstalled_at, sync_state, created_at, updated_at
-		FROM stores WHERE api_key_public = $1
-	`, key)
-
-	return r.scanStore(row)
+	var store models.Store
+	err := r.collection.FindOne(ctx, bson.M{"api_key_public": key}).Decode(&store)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("store not found")
+		}
+		return nil, err
+	}
+	return &store, nil
 }
 
 func (r *StoreRepository) GetByID(ctx context.Context, id string) (*models.Store, error) {
-	row := r.pool.QueryRow(ctx, `
-		SELECT id, shop_domain, shop_name, encrypted_access_token, api_key_public,
-		       api_key_private, product_index_uid, meilisearch_index_uid, meilisearch_document_type,
-		       meilisearch_url, meilisearch_api_key,
-		       plan_level, status, webhook_secret,
-		       installed_at, uninstalled_at, sync_state, created_at, updated_at
-		FROM stores WHERE id = $1
-	`, id)
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid store ID: %w", err)
+	}
 
-	return r.scanStore(row)
+	var store models.Store
+	err = r.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&store)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, errors.New("store not found")
+		}
+		return nil, err
+	}
+	return &store, nil
 }
 
 func (r *StoreRepository) UpdateSyncState(ctx context.Context, storeID string, state map[string]interface{}) error {
 	if state == nil {
 		state = map[string]interface{}{}
 	}
-	payload, err := json.Marshal(state)
+
+	objectID, err := primitive.ObjectIDFromHex(storeID)
 	if err != nil {
-		return fmt.Errorf("failed to marshal sync state: %w", err)
+		return fmt.Errorf("invalid store ID: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx, `
-		UPDATE stores SET sync_state = $1, updated_at = $2 WHERE id = $3
-	`, payload, time.Now().UTC(), storeID)
+	filter := bson.M{"_id": objectID}
+	update := bson.M{
+		"$set": bson.M{
+			"sync_state": state,
+			"updated_at": time.Now().UTC(),
+		},
+	}
+
+	_, err = r.collection.UpdateOne(ctx, filter, update)
 	return err
 }

@@ -217,7 +217,7 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	sessionToken, err := auth.GenerateSessionToken(dbStore.ID, dbStore.ShopDomain, []byte(h.cfg.JWTSigningKey), h.sessionTTL)
+	sessionToken, err := auth.GenerateSessionToken(dbStore.ID.Hex(), dbStore.ShopDomain, []byte(h.cfg.JWTSigningKey), h.sessionTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate session token"})
 		return
@@ -383,7 +383,7 @@ func (h *AuthHandler) InstallStore(c *gin.Context) {
 	}
 
 	// Generate session token for frontend
-	sessionToken, err := auth.GenerateSessionToken(dbStore.ID, dbStore.ShopDomain, []byte(h.cfg.JWTSigningKey), h.sessionTTL)
+	sessionToken, err := auth.GenerateSessionToken(dbStore.ID.Hex(), dbStore.ShopDomain, []byte(h.cfg.JWTSigningKey), h.sessionTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate session token"})
 		return

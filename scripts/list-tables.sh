@@ -1,5 +1,5 @@
 #!/bin/bash
-# List all tables in the database
+# List all collections in the MongoDB database
 
 if [ -z "$DATABASE_URL" ]; then
     echo "Error: DATABASE_URL not set"
@@ -8,30 +8,22 @@ if [ -z "$DATABASE_URL" ]; then
     exit 1
 fi
 
-echo "=== All Tables in Database ==="
-psql "$DATABASE_URL" -c "\dt"
+echo "=== All Collections in Database ==="
+mongosh "$DATABASE_URL" --quiet --eval "db.getCollectionNames()"
 
 echo ""
-echo "=== Table Details ==="
+echo "=== Collection Details ==="
 echo ""
-echo "--- Stores Table ---"
-psql "$DATABASE_URL" -c "\d stores"
+echo "--- Stores Collection (sample document) ---"
+mongosh "$DATABASE_URL" --quiet --eval "db.stores.findOne()"
 
 echo ""
-echo "--- Sessions Table ---"
-psql "$DATABASE_URL" -c "\d sessions"
+echo "--- Sessions Collection (sample document) ---"
+mongosh "$DATABASE_URL" --quiet --eval "db.sessions.findOne()"
 
 echo ""
-echo "=== Row Counts ==="
-psql "$DATABASE_URL" -c "
-SELECT 
-    'stores' as table_name, 
-    COUNT(*) as row_count 
-FROM stores
-UNION ALL
-SELECT 
-    'sessions' as table_name, 
-    COUNT(*) as row_count 
-FROM sessions;
+echo "=== Document Counts ==="
+mongosh "$DATABASE_URL" --quiet --eval "
+print('stores: ' + db.stores.countDocuments());
+print('sessions: ' + db.sessions.countDocuments());
 "
-
