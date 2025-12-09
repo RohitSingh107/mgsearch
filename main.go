@@ -60,6 +60,8 @@ func main() {
 	db := database.GetDatabase(client, dbName)
 	storeRepo := repositories.NewStoreRepository(db)
 	sessionRepo := repositories.NewSessionRepository(db)
+	userRepo := repositories.NewUserRepository(db)
+	clientRepo := repositories.NewClientRepository(db)
 	meiliService := services.NewMeilisearchService(cfg)
 	shopifyService := services.NewShopifyService(cfg)
 
@@ -77,6 +79,13 @@ func main() {
 	searchHandler := handlers.NewSearchHandler(meiliService)
 	settingsHandler := handlers.NewSettingsHandler(meiliService)
 	tasksHandler := handlers.NewTasksHandler(meiliService)
+
+	// User auth handlers and middleware
+	userAuthHandler := handlers.NewUserAuthHandler(cfg, userRepo, clientRepo)
+	jwtMiddleware := middleware.NewJWTMiddleware(cfg.JWTSigningKey)
+	apiKeyMiddleware := middleware.NewAPIKeyMiddleware(clientRepo)
+
+	// Legacy middleware
 	authMiddleware := middleware.NewAuthMiddleware(cfg.JWTSigningKey)
 
 	router := gin.Default()
@@ -88,8 +97,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "pong"})
 	})
 
+	// Legacy Shopify endpoints (kept for backward compatibility)
 	api := router.Group("/api")
 	{
+		// Note: These Shopify-specific endpoints are kept for backward compatibility
+		// but are deprecated in favor of v1 auth endpoints
 		shopifyGroup := api.Group("/auth/shopify")
 		{
 			shopifyGroup.POST("/begin", authHandler.Begin)
@@ -120,21 +132,39 @@ func main() {
 
 	v1 := router.Group("/api/v1")
 	{
+		// Public auth endpoints (no authentication required)
+		authGroup := v1.Group("/auth")
+		{
+			authGroup.POST("/register/user", userAuthHandler.RegisterUser)
+			authGroup.POST("/register/client", jwtMiddleware.RequireAuth(), userAuthHandler.RegisterClient)
+			authGroup.POST("/login", userAuthHandler.Login)
+			authGroup.GET("/me", jwtMiddleware.RequireAuth(), userAuthHandler.GetCurrentUser)
+			authGroup.PUT("/user", jwtMiddleware.RequireAuth(), userAuthHandler.UpdateUser)
+
+			// Client management endpoints
+			authGroup.GET("/clients", jwtMiddleware.RequireAuth(), userAuthHandler.GetUserClients)
+			authGroup.GET("/clients/:client_id", jwtMiddleware.RequireAuth(), userAuthHandler.GetClientDetails)
+
+			// API key management endpoints
+			authGroup.POST("/clients/:client_id/api-keys", jwtMiddleware.RequireAuth(), userAuthHandler.GenerateAPIKey)
+			authGroup.DELETE("/clients/:client_id/api-keys/:key_id", jwtMiddleware.RequireAuth(), userAuthHandler.RevokeAPIKey)
+		}
+
+		// Storefront search endpoints (no authentication required)
 		v1.GET("/search", storefrontHandler.Search)
 		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
-		v1.POST("/clients/:client_name/:index_name/search", searchHandler.Search)
-		v1.POST("/clients/:client_name/:index_name/documents", searchHandler.IndexDocument)
 
-		// Settings endpoint
-		// PATCH /api/v1/clients/:client_name/:index_name/settings
-		// Example: PATCH /api/v1/clients/myclient/movies/settings
-		// Body: { "rankingRules": [...], "searchableAttributes": [...], ... }
-		v1.PATCH("/clients/:client_name/:index_name/settings", settingsHandler.UpdateSettings)
+		// Client-specific endpoints (API key authentication required)
+		clientGroup := v1.Group("/clients/:client_name/:index_name")
+		clientGroup.Use(apiKeyMiddleware.RequireAPIKey())
+		{
+			clientGroup.POST("/search", searchHandler.Search)
+			clientGroup.POST("/documents", searchHandler.IndexDocument)
+			clientGroup.PATCH("/settings", settingsHandler.UpdateSettings)
+		}
 
-		// Tasks endpoint
-		// GET /api/v1/clients/:client_name/tasks/:task_id
-		// Example: GET /api/v1/clients/myclient/tasks/15
-		v1.GET("/clients/:client_name/tasks/:task_id", tasksHandler.GetTask)
+		// Tasks endpoint (API key authentication required)
+		v1.GET("/clients/:client_name/tasks/:task_id", apiKeyMiddleware.RequireAPIKey(), tasksHandler.GetTask)
 	}
 
 	addr := ":" + cfg.ServerPort

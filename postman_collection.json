@@ -1,0 +1,572 @@
+{
+	"info": {
+		"_postman_id": "mgsearch-auth-api",
+		"name": "MGSearch Authentication API",
+		"description": "Complete collection of MGSearch authentication and client management APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "client_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "key_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('jwt_token', jsonData.token);",
+									"    pm.collectionVariables.set('user_id', jsonData.user.id);",
+									"    console.log('JWT Token saved:', jsonData.token);",
+									"    console.log('User ID saved:', jsonData.user.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register/user",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "register", "user"]
+						},
+						"description": "Register a new user account. Returns JWT token automatically saved to collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('jwt_token', jsonData.token);",
+									"    pm.collectionVariables.set('user_id', jsonData.user.id);",
+									"    console.log('JWT Token saved:', jsonData.token);",
+									"    console.log('User ID saved:', jsonData.user.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "Login with email and password. Returns JWT token automatically saved to collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "me"]
+						},
+						"description": "Get the current authenticated user's profile."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Smith\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/user",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "user"]
+						},
+						"description": "Update the current user's profile information."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Client Management",
+			"item": [
+				{
+					"name": "Register Client",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('client_id', jsonData.client.id);",
+									"    console.log('Client ID saved:', jsonData.client.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"my-company\",\n  \"description\": \"My Company's Search Service\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register/client",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "register", "client"]
+						},
+						"description": "Create a new client (organization). Client ID is automatically saved to collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User's Clients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/clients",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "clients"]
+						},
+						"description": "Get all clients the authenticated user has access to."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Client Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/clients/{{client_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "clients", "{{client_id}}"]
+						},
+						"description": "Get details of a specific client including all API keys."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "API Key Management",
+			"item": [
+				{
+					"name": "Generate API Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('api_key', jsonData.api_key);",
+									"    pm.collectionVariables.set('key_id', jsonData.key_id);",
+									"    console.log('API Key saved:', jsonData.api_key);",
+									"    console.log('Key ID saved:', jsonData.key_id);",
+									"    console.log('⚠️  WARNING: Save this API key now. You won\\'t be able to see it again!');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Production API Key\",\n  \"permissions\": [\"read\", \"write\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/clients/{{client_id}}/api-keys",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "clients", "{{client_id}}", "api-keys"]
+						},
+						"description": "Generate a new API key for the client. API key is automatically saved to collection variables."
+					},
+					"response": []
+				},
+				{
+					"name": "Generate API Key with Expiration",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('api_key', jsonData.api_key);",
+									"    pm.collectionVariables.set('key_id', jsonData.key_id);",
+									"    console.log('API Key saved:', jsonData.api_key);",
+									"    console.log('Key ID saved:', jsonData.key_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Temporary API Key\",\n  \"permissions\": [\"read\"],\n  \"expires_at\": \"2026-12-31T23:59:59Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/clients/{{client_id}}/api-keys",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "clients", "{{client_id}}", "api-keys"]
+						},
+						"description": "Generate an API key with an expiration date."
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke API Key",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/clients/{{client_id}}/api-keys/{{key_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "auth", "clients", "{{client_id}}", "api-keys", "{{key_id}}"]
+						},
+						"description": "Revoke (deactivate) an API key."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "API Key Protected Endpoints",
+			"item": [
+				{
+					"name": "Search Documents (API Key)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}",
+								"description": "API Key Authentication"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"q\": \"search query\",\n  \"limit\": 20,\n  \"offset\": 0\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/clients/my-company/products/search",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "clients", "my-company", "products", "search"]
+						},
+						"description": "Search documents using API key authentication. Replace 'my-company' and 'products' with your client name and index name."
+					},
+					"response": []
+				},
+				{
+					"name": "Search Documents (X-API-Key)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-API-Key",
+								"value": "{{api_key}}",
+								"description": "Alternative API Key Header"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"q\": \"laptop\",\n  \"limit\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/clients/my-company/products/search",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "clients", "my-company", "products", "search"]
+						},
+						"description": "Search documents using X-API-Key header (alternative to Authorization header)."
+					},
+					"response": []
+				},
+				{
+					"name": "Index Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": \"prod-123\",\n  \"title\": \"Gaming Laptop\",\n  \"description\": \"High-performance gaming laptop\",\n  \"price\": 1299.99,\n  \"category\": \"electronics\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/clients/my-company/products/documents",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "clients", "my-company", "products", "documents"]
+						},
+						"description": "Index a document to the search index."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Index Settings",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"searchableAttributes\": [\"title\", \"description\", \"category\"],\n  \"rankingRules\": [\"words\", \"typo\", \"proximity\", \"attribute\", \"sort\", \"exactness\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/clients/my-company/products/settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "clients", "my-company", "products", "settings"]
+						},
+						"description": "Update Meilisearch index settings."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/clients/my-company/tasks/1",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "clients", "my-company", "tasks", "1"]
+						},
+						"description": "Get the status of a Meilisearch task."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Public Endpoints",
+			"item": [
+				{
+					"name": "Storefront Search (GET)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/search?q=laptop&limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "laptop"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Public storefront search (no authentication required)."
+					},
+					"response": []
+				},
+				{
+					"name": "Storefront Search (POST)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"q\": \"laptop\",\n  \"limit\": 20,\n  \"filters\": \"category = electronics\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/search",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "search"]
+						},
+						"description": "Public storefront search with POST (supports filters and complex queries)."
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ping",
+							"host": ["{{base_url}}"],
+							"path": ["ping"]
+						},
+						"description": "Health check endpoint to verify the server is running."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
+
