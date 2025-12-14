@@ -20,16 +20,16 @@ func NewTasksHandler(meilisearchService *services.MeilisearchService) *TasksHand
 }
 
 // GetTask handles task details requests
-// GET /api/v1/clients/:client_name/tasks/:task_id
+// GET /api/v1/clients/:client_id/tasks/:task_id
 // Returns task details from Meilisearch
 func (h *TasksHandler) GetTask(c *gin.Context) {
-	// Get client name and task ID from URL parameters
-	clientName := c.Param("client_name")
+	// Get client ID and task ID from URL parameters
+	clientID := c.Param("client_id")
 	taskID := c.Param("task_id")
 
-	if clientName == "" {
+	if clientID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "client name is required",
+			"error": "client ID is required",
 		})
 		return
 	}

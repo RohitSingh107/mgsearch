@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"mgsearch/config"
 	"mgsearch/models"
+	"net/http"
 	"strings"
 
 	meilisearch "github.com/meilisearch/meilisearch-go"
@@ -95,6 +95,53 @@ func (s *MeilisearchService) DeleteDocument(indexName, documentID string) error 
 	index := s.client.Index(indexName)
 	_, err := index.DeleteDocument(documentID)
 	return err
+}
+
+// CreateIndex creates a new index in Meilisearch
+func (s *MeilisearchService) CreateIndex(uid string, primaryKey string) (map[string]interface{}, error) {
+	cfg := &meilisearch.IndexConfig{
+		Uid: uid,
+	}
+	if primaryKey != "" {
+		cfg.PrimaryKey = primaryKey
+	}
+
+	task, err := s.client.CreateIndex(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("meilisearch create index failed: %w", err)
+	}
+
+	raw, err := json.Marshal(task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal create index response: %w", err)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal create index response: %w", err)
+	}
+
+	return response, nil
+}
+
+// GetIndex retrieves index information from Meilisearch
+func (s *MeilisearchService) GetIndex(uid string) (map[string]interface{}, error) {
+	idx, err := s.client.GetIndex(uid)
+	if err != nil {
+		return nil, fmt.Errorf("meilisearch get index failed: %w", err)
+	}
+
+	raw, err := json.Marshal(idx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal get index response: %w", err)
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal get index response: %w", err)
+	}
+
+	return response, nil
 }
 
 // EnsureIndex creates the index if it does not already exist.

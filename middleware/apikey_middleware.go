@@ -80,9 +80,9 @@ func (m *APIKeyMiddleware) RequireAPIKey() gin.HandlerFunc {
 			_ = m.clientRepo.UpdateAPIKeyLastUsed(ctx, client.ID, apiKeyID)
 		}()
 
-		// Verify client_name in URL matches the client that owns the API key
-		clientNameParam := c.Param("client_name")
-		if clientNameParam != "" && clientNameParam != client.Name {
+		// Verify client_id in URL matches the client that owns the API key
+		clientIDParam := c.Param("client_id")
+		if clientIDParam != "" && clientIDParam != client.ID.Hex() {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "API key does not belong to this client",
 				"code":  "FORBIDDEN",

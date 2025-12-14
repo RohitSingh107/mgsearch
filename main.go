@@ -62,6 +62,7 @@ func main() {
 	sessionRepo := repositories.NewSessionRepository(db)
 	userRepo := repositories.NewUserRepository(db)
 	clientRepo := repositories.NewClientRepository(db)
+	indexRepo := repositories.NewIndexRepository(db)
 	meiliService := services.NewMeilisearchService(cfg)
 	shopifyService := services.NewShopifyService(cfg)
 
@@ -76,9 +77,10 @@ func main() {
 	}
 	webhookHandler := handlers.NewWebhookHandler(shopifyService, storeRepo, meiliService)
 	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService)
-	searchHandler := handlers.NewSearchHandler(meiliService)
-	settingsHandler := handlers.NewSettingsHandler(meiliService)
+	searchHandler := handlers.NewSearchHandler(meiliService, clientRepo)
+	settingsHandler := handlers.NewSettingsHandler(meiliService, clientRepo)
 	tasksHandler := handlers.NewTasksHandler(meiliService)
+	indexHandler := handlers.NewIndexHandler(clientRepo, indexRepo, meiliService)
 
 	// User auth handlers and middleware
 	userAuthHandler := handlers.NewUserAuthHandler(cfg, userRepo, clientRepo)
@@ -132,7 +134,7 @@ func main() {
 
 	v1 := router.Group("/api/v1")
 	{
-		// Public auth endpoints (no authentication required)
+		// Public auth endpoints
 		authGroup := v1.Group("/auth")
 		{
 			authGroup.POST("/register/user", userAuthHandler.RegisterUser)
@@ -140,31 +142,46 @@ func main() {
 			authGroup.POST("/login", userAuthHandler.Login)
 			authGroup.GET("/me", jwtMiddleware.RequireAuth(), userAuthHandler.GetCurrentUser)
 			authGroup.PUT("/user", jwtMiddleware.RequireAuth(), userAuthHandler.UpdateUser)
+		}
 
-			// Client management endpoints
-			authGroup.GET("/clients", jwtMiddleware.RequireAuth(), userAuthHandler.GetUserClients)
-			authGroup.GET("/clients/:client_id", jwtMiddleware.RequireAuth(), userAuthHandler.GetClientDetails)
+		// Client Management Endpoints (JWT Auth)
+		// These are typically used by the dashboard/admin interface
+		clientsGroup := v1.Group("/clients")
+		clientsGroup.Use(jwtMiddleware.RequireAuth())
+		{
+			// List/Get clients
+			clientsGroup.GET("", userAuthHandler.GetUserClients)
+			clientsGroup.GET("/:client_id", userAuthHandler.GetClientDetails)
 
-			// API key management endpoints
-			authGroup.POST("/clients/:client_id/api-keys", jwtMiddleware.RequireAuth(), userAuthHandler.GenerateAPIKey)
-			authGroup.DELETE("/clients/:client_id/api-keys/:key_id", jwtMiddleware.RequireAuth(), userAuthHandler.RevokeAPIKey)
+			// API key management
+			clientsGroup.POST("/:client_id/api-keys", userAuthHandler.GenerateAPIKey)
+			clientsGroup.DELETE("/:client_id/api-keys/:key_id", userAuthHandler.RevokeAPIKey)
+
+			// Index management
+			clientsGroup.POST("/:client_id/indexes", indexHandler.CreateIndex)
+			clientsGroup.GET("/:client_id/indexes", indexHandler.GetClientIndexes)
+
+			// Index operations (JWT access for dashboard)
+			clientsGroup.POST("/:client_id/indexes/:index_name/documents", searchHandler.IndexDocument)
+			clientsGroup.PATCH("/:client_id/indexes/:index_name/settings", settingsHandler.UpdateSettings)
 		}
 
 		// Storefront search endpoints (no authentication required)
 		v1.GET("/search", storefrontHandler.Search)
 		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
 
-		// Client-specific endpoints (API key authentication required)
-		clientGroup := v1.Group("/clients/:client_name/:index_name")
-		clientGroup.Use(apiKeyMiddleware.RequireAPIKey())
+		// Client-specific Search/Doc endpoints (API key authentication required)
+		// These are used by the client's application (server-side or client-side if key is exposed)
+		searchGroup := v1.Group("/clients/:client_id/indexes/:index_name")
+		searchGroup.Use(apiKeyMiddleware.RequireAPIKey())
 		{
-			clientGroup.POST("/search", searchHandler.Search)
-			clientGroup.POST("/documents", searchHandler.IndexDocument)
-			clientGroup.PATCH("/settings", settingsHandler.UpdateSettings)
+			searchGroup.POST("/search", searchHandler.Search)
+			// searchGroup.POST("/documents", searchHandler.IndexDocument) // Moved to management
+			// searchGroup.PATCH("/settings", settingsHandler.UpdateSettings) // Moved to management
 		}
 
 		// Tasks endpoint (API key authentication required)
-		v1.GET("/clients/:client_name/tasks/:task_id", apiKeyMiddleware.RequireAPIKey(), tasksHandler.GetTask)
+		v1.GET("/clients/:client_id/tasks/:task_id", apiKeyMiddleware.RequireAPIKey(), tasksHandler.GetTask)
 	}
 
 	addr := ":" + cfg.ServerPort

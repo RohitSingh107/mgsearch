@@ -203,7 +203,7 @@ Authorization: Bearer <jwt_token>
 ```
 
 ### Get User's Clients
-**GET** `/api/v1/auth/clients`
+**GET** `/api/v1/clients`
 
 Get all clients the authenticated user has access to.
 
@@ -231,7 +231,7 @@ Authorization: Bearer <jwt_token>
 ```
 
 ### Get Client Details
-**GET** `/api/v1/auth/clients/:client_id`
+**GET** `/api/v1/clients/:client_id`
 
 Get details of a specific client.
 
@@ -268,7 +268,7 @@ Authorization: Bearer <jwt_token>
 ```
 
 ### Generate API Key
-**POST** `/api/v1/auth/clients/:client_id/api-keys`
+**POST** `/api/v1/clients/:client_id/api-keys`
 
 Generate a new API key for the client.
 
@@ -300,7 +300,7 @@ Authorization: Bearer <jwt_token>
 **Important:** The raw API key is only shown once during generation. Store it securely.
 
 ### Revoke API Key
-**DELETE** `/api/v1/auth/clients/:client_id/api-keys/:key_id`
+**DELETE** `/api/v1/clients/:client_id/api-keys/:key_id`
 
 Revoke (deactivate) an API key.
 
@@ -316,14 +316,60 @@ Authorization: Bearer <jwt_token>
 }
 ```
 
+### Index Management
+
+#### Create Index
+**POST** `/api/v1/clients/:client_id/indexes`
+
+Create a new index for the client.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
+**Request Body:**
+```json
+{
+  "name": "products",
+  "primary_key": "id"
+}
+```
+
+**Response:**
+```json
+{
+  "index": {
+    "id": "...",
+    "client_id": "...",
+    "name": "products",
+    "uid": "client_name__products",
+    "primary_key": "id",
+    "created_at": "...",
+    "updated_at": "..."
+  },
+  "task": { ... }
+}
+```
+
+#### List Indexes
+**GET** `/api/v1/clients/:client_id/indexes`
+
+List all indexes for a client.
+
+**Headers:**
+```
+Authorization: Bearer <jwt_token>
+```
+
 ## Using API Keys
 
 Once you have an API key, you can use it to authenticate requests to client-specific endpoints:
 
 ### Example: Search with API Key
-**POST** `/api/v1/clients/:client_name/:index_name/search`
+**POST** `/api/v1/clients/:client_id/indexes/:index_name/search`
 
-**Important:** The `:client_name` in the URL **must match** the client that owns the API key. Using an API key with a different client name will return `403 Forbidden`.
+**Important:** The `:client_id` in the URL **must match** the client that owns the API key. The `:index_name` is the user-friendly name (e.g., `products`), NOT the internal UID.
 
 **Headers:**
 ```
@@ -343,7 +389,7 @@ X-API-Key: <api_key>
 ```
 
 ### Example: Index Document with API Key
-**POST** `/api/v1/clients/:client_name/:index_name/documents`
+**POST** `/api/v1/clients/:client_id/indexes/:index_name/documents`
 
 **Headers:**
 ```
@@ -360,7 +406,7 @@ Authorization: Bearer <api_key>
 ```
 
 ### Example: Update Settings with API Key
-**PATCH** `/api/v1/clients/:client_name/:index_name/settings`
+**PATCH** `/api/v1/clients/:client_id/indexes/:index_name/settings`
 
 **Headers:**
 ```
@@ -376,7 +422,7 @@ Authorization: Bearer <api_key>
 ```
 
 ### Example: Get Task Status with API Key
-**GET** `/api/v1/clients/:client_name/tasks/:task_id`
+**GET** `/api/v1/clients/:client_id/tasks/:task_id`
 
 **Headers:**
 ```
@@ -414,7 +460,7 @@ Save the returned `client.id`.
 
 ### 3. Generate an API Key
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/clients/<client_id>/api-keys \
+curl -X POST http://localhost:8080/api/v1/clients/<client_id>/api-keys \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{
@@ -425,9 +471,20 @@ curl -X POST http://localhost:8080/api/v1/auth/clients/<client_id>/api-keys \
 
 Save the returned `api_key`. This is shown only once!
 
-### 4. Use the API Key
+### 4. Create an Index
 ```bash
-curl -X POST http://localhost:8080/api/v1/clients/acme-corp/products/search \
+curl -X POST http://localhost:8080/api/v1/clients/<client_id>/indexes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "name": "products",
+    "primary_key": "id"
+  }'
+```
+
+### 5. Use the API Key to Search
+```bash
+curl -X POST http://localhost:8080/api/v1/clients/<client_id>/indexes/products/search \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <api_key>" \
   -d '{
@@ -449,7 +506,7 @@ curl -X POST http://localhost:8080/api/v1/clients/acme-corp/products/search \
 4. **Access Control**: 
    - Users can only access clients they are associated with
    - Every client operation verifies user membership
-   - API keys are bound to specific clients - client name in URL must match
+   - API keys are bound to specific clients - client ID in URL must match
    - See [Access Control Documentation](ACCESS_CONTROL.md) for details
    - See [API Key Validation](API_KEY_VALIDATION.md) for API key security
 5. **Soft Deletes**: Users and clients are soft-deleted (is_active flag) for data integrity
@@ -469,18 +526,7 @@ All endpoints return consistent error responses:
 Common HTTP status codes:
 - `400` - Bad Request (invalid input)
 - `401` - Unauthorized (missing or invalid authentication)
-- `403` - Forbidden (insufficient permissions or wrong client name for API key)
+- `403` - Forbidden (insufficient permissions or wrong client ID for API key)
 - `404` - Not Found
 - `409` - Conflict (duplicate resource)
 - `500` - Internal Server Error
-
-## Migration from Legacy Auth
-
-The legacy Shopify-specific authentication endpoints are still available for backward compatibility but are deprecated:
-- `/api/auth/shopify/begin`
-- `/api/auth/shopify/callback`
-- `/api/auth/shopify/exchange`
-- `/api/auth/shopify/install`
-
-New applications should use the auth endpoints under `/api/v1` exclusively.
-
