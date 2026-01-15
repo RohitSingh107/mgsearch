@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -34,28 +35,10 @@ func (h *StorefrontHandler) Search(c *gin.Context) {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, X-Storefront-Key, Authorization, ngrok-skip-browser-warning")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Max-Age", "43200")
 		c.Status(http.StatusNoContent)
-		return
-	}
-
-	publicKey := c.GetHeader("X-Storefront-Key")
-	if publicKey == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing storefront key"})
-		return
-	}
-
-	store, err := h.stores.GetByPublicAPIKey(c.Request.Context(), publicKey)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid storefront key"})
-		return
-	}
-
-	indexUID := store.IndexUID()
-	if indexUID == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "store index not configured"})
 		return
 	}
 
@@ -103,10 +86,43 @@ func (h *StorefrontHandler) Search(c *gin.Context) {
 		}
 	}
 
+	// Identify Store
+	var store *models.Store
+	var err error
+
+	// Require shop domain
+	shopDomain := c.Query("shop")
+	if shopDomain == "" {
+		// Try finding shop in body (for POST requests)
+		if s, ok := body["shop"].(string); ok {
+			shopDomain = s
+		}
+	}
+
+	if shopDomain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing shop domain"})
+		return
+	}
+	store, err = h.stores.GetByShopDomain(c.Request.Context(), shopDomain)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "store not found"})
+		return
+	}
+
+	indexUID := store.IndexUID()
+	if indexUID == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "store index not configured"})
+		return
+	}
+
 	// Ensure 'q' field exists (required by Meilisearch, can be empty string)
 	if _, ok := body["q"]; !ok {
 		body["q"] = ""
 	}
+
+	// Remove internal fields
+	delete(body, "shop")
 
 	resp, err := h.meili.Search(indexUID, &body)
 	if err != nil {
@@ -132,62 +148,22 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, X-Storefront-Key, Authorization, ngrok-skip-browser-warning")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Max-Age", "43200")
 		c.Status(http.StatusNoContent)
 		return
 	}
 
-	publicKey := c.GetHeader("X-Storefront-Key")
-	if publicKey == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing storefront key"})
+	shopDomain := c.Query("shop")
+	if shopDomain == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing shop parameter"})
 		return
 	}
 
-	store, err := h.stores.GetByPublicAPIKey(c.Request.Context(), publicKey)
+	store, err := h.stores.GetByShopDomain(c.Request.Context(), shopDomain)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid storefront key"})
-		return
-	}
-
-	var productID interface{}
-	var limit int
-
-	// Support both GET (query param 'id') and POST (JSON body {"id": ...})
-	if c.Request.Method == "POST" {
-		var body struct {
-			ID    interface{} `json:"id"`
-			Limit int         `json:"limit,omitempty"`
-		}
-		if err := c.ShouldBindJSON(&body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body", "details": err.Error()})
-			return
-		}
-		productID = body.ID
-		limit = body.Limit
-	} else {
-		productIDStr := c.Query("id")
-		if productIDStr == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "missing product id"})
-			return
-		}
-		// Try to parse as int, if fails keep as string
-		if id, err := strconv.Atoi(productIDStr); err == nil {
-			productID = id
-		} else {
-			productID = productIDStr
-		}
-		// Parse limit from query params
-		if limitStr := c.Query("limit"); limitStr != "" {
-			if parsedLimit, err := strconv.Atoi(limitStr); err == nil {
-				limit = parsedLimit
-			}
-		}
-	}
-
-	if productID == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "product id is required"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "store not found"})
 		return
 	}
 
@@ -197,12 +173,14 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 		return
 	}
 
-	// Use default limit of 10 if not specified
-	if limit <= 0 {
-		limit = 10
+	// Read raw request body to proxy it
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read request body", "details": err.Error()})
+		return
 	}
 
-	resp, err := h.qdrant.Recommend(collectionName, []interface{}{productID}, limit)
+	resp, err := h.qdrant.ProxyQuery(collectionName, body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch similar products", "details": err.Error()})
 		return
@@ -215,5 +193,5 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 		c.Header("Access-Control-Allow-Credentials", "true")
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.Data(http.StatusOK, "application/json", resp)
 }

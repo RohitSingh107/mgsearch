@@ -47,12 +47,14 @@ func main() {
 	ctx := context.Background()
 
 	// Connect to database
-	pool, err := database.NewPool(ctx, cfg)
+	client, err := database.NewClient(ctx, cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to database: %v\n", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer client.Disconnect(ctx)
+
+	db := database.GetDatabase(client, "mgsearch")
 
 	// Generate keys
 	publicKey, err := security.GenerateAPIKey(16)
@@ -103,7 +105,7 @@ func main() {
 	}
 
 	// Create store
-	storeRepo := repositories.NewStoreRepository(pool)
+	storeRepo := repositories.NewStoreRepository(db)
 	storeModel := &models.Store{
 		ShopDomain:           shopDomain,
 		ShopName:             shopName,
