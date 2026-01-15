@@ -173,14 +173,35 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 		return
 	}
 
-	// Read raw request body to proxy it
-	body, err := io.ReadAll(c.Request.Body)
+	// Read request body
+	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read request body", "details": err.Error()})
 		return
 	}
 
-	resp, err := h.qdrant.ProxyQuery(collectionName, body)
+	// Parse body to force with_payload: true
+	var bodyMap map[string]interface{}
+	if len(bodyBytes) > 0 {
+		if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body", "details": err.Error()})
+			return
+		}
+	} else {
+		bodyMap = make(map[string]interface{})
+	}
+
+	// Force payload return
+	bodyMap["with_payload"] = true
+
+	// Re-marshal
+	newBody, err := json.Marshal(bodyMap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to prepare request", "details": err.Error()})
+		return
+	}
+
+	resp, err := h.qdrant.ProxyQuery(collectionName, newBody)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch similar products", "details": err.Error()})
 		return
