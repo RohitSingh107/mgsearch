@@ -167,7 +167,11 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 		return
 	}
 
-	collectionName := store.QdrantCollection()
+	collectionName := c.Query("collection")
+	if collectionName == "" {
+		collectionName = store.QdrantCollection()
+	}
+
 	if collectionName == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "qdrant collection not configured for store"})
 		return
