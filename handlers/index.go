@@ -47,12 +47,15 @@ func (h *IndexHandler) CreateIndex(c *gin.Context) {
 		return
 	}
 
-	// Check if index already exists in DB
+	// Check if index already exists in DB - REMOVED due to race condition
+	// We will rely on the unique constraint in the database
+	/*
 	existing, _ := h.indexRepo.FindByNameAndClientID(c.Request.Context(), req.Name, clientID)
 	if existing != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Index with this name already exists for this client"})
 		return
 	}
+	*/
 
 	// Generate UID
 	// Format: client_name__index_name
@@ -75,6 +78,10 @@ func (h *IndexHandler) CreateIndex(c *gin.Context) {
 
 	savedIndex, err := h.indexRepo.Create(c.Request.Context(), index)
 	if err != nil {
+		if err.Error() == "index already exists" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Index with this name already exists for this client"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save index record: %v", err)})
 		return
 	}

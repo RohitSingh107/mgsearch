@@ -65,6 +65,7 @@ func main() {
 	indexRepo := repositories.NewIndexRepository(db)
 	meiliService := services.NewMeilisearchService(cfg)
 	shopifyService := services.NewShopifyService(cfg)
+	qdrantService := services.NewQdrantService(cfg)
 
 	authHandler, err := handlers.NewAuthHandler(cfg, shopifyService, storeRepo, meiliService)
 	if err != nil {
@@ -76,7 +77,7 @@ func main() {
 		log.Fatalf("failed to initialize session handler: %v", err)
 	}
 	webhookHandler := handlers.NewWebhookHandler(shopifyService, storeRepo, meiliService)
-	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService)
+	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService, qdrantService)
 	searchHandler := handlers.NewSearchHandler(meiliService, clientRepo)
 	settingsHandler := handlers.NewSettingsHandler(meiliService, clientRepo)
 	tasksHandler := handlers.NewTasksHandler(meiliService)
@@ -169,6 +170,10 @@ func main() {
 		// Storefront search endpoints (no authentication required)
 		v1.GET("/search", storefrontHandler.Search)
 		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
+
+		// Similar products endpoint
+		v1.GET("/similar", storefrontHandler.Similar)
+		v1.POST("/similar", storefrontHandler.Similar)
 
 		// Client-specific Search/Doc endpoints (API key authentication required)
 		// These are used by the client's application (server-side or client-side if key is exposed)

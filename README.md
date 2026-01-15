@@ -85,6 +85,7 @@ mgsearch/
 │   └── session_repository.go
 ├── services/              # Business logic and external service integrations
 │   ├── meilisearch.go     # Meilisearch API client wrapper
+│   ├── qdrant.go          # Qdrant vector database client wrapper
 │   └── shopify.go         # Shopify API client wrapper
 ├── handlers/              # HTTP request handlers (API endpoints)
 │   ├── user_auth.go       # SaaS User/Client auth
@@ -137,6 +138,8 @@ The service reads environment variables directly or from a `.env` file. Importan
 | `MEILISEARCH_URL` | Meilisearch host (default comes from dev shell) |
 | `MEILISEARCH_API_KEY` | Admin key for Meilisearch |
 | `DATABASE_URL` | MongoDB connection string |
+| `QDRANT_URL` | Qdrant host for vector similarity search (optional) |
+| `QDRANT_API_KEY` | Qdrant API key (optional) |
 | `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` | Shopify app credentials |
 | `SHOPIFY_APP_URL` | Public URL where Shopify redirects after OAuth |
 | `JWT_SIGNING_KEY` | 32-byte hex key for signing dashboard sessions |
@@ -159,6 +162,18 @@ GET /ping
 ```
 POST /api/v1/clients/:client_id/indexes/:index_name/search
 ```
+
+#### Storefront Search (Shopify)
+```
+GET/POST /api/v1/search
+```
+
+#### Similar Products (Shopify)
+```
+GET/POST /api/v1/similar
+```
+
+📖 See [`docs/SIMILAR_PRODUCTS_API.md`](docs/SIMILAR_PRODUCTS_API.md) for vector-based product recommendations using Qdrant.
 
 #### Update Settings (SaaS)
 ```

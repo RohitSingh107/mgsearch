@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -93,6 +94,28 @@ func RunMigrations(ctx context.Context, client *mongo.Client, dbName string) err
 
 	if _, err := clientsCollection.Indexes().CreateMany(ctx, clientIndexes); err != nil {
 		return fmt.Errorf("failed to create client indexes: %w", err)
+	}
+
+	// Create indexes collection and indexes
+	indexesCollection := db.Collection("indexes")
+
+	// Create unique index on client_id + name
+	indexIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "client_id", Value: 1},
+				{Key: "name", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: map[string]interface{}{"uid": 1},
+			Options: options.Index().SetUnique(true),
+		},
+	}
+
+	if _, err := indexesCollection.Indexes().CreateMany(ctx, indexIndexes); err != nil {
+		return fmt.Errorf("failed to create index indexes: %w", err)
 	}
 
 	return nil

@@ -22,6 +22,8 @@ type Config struct {
 	EncryptionKey       string
 	WebhookSharedSecret string
 	SessionAPIKey       string // Optional API key for session endpoints
+	QdrantURL           string
+	QdrantAPIKey        string
 }
 
 // LoadConfig loads configuration from .env file and environment variables.
@@ -45,6 +47,8 @@ func LoadConfig() *Config {
 		EncryptionKey:       getEnv("ENCRYPTION_KEY", ""),
 		WebhookSharedSecret: getEnv("SHOPIFY_WEBHOOK_SECRET", ""),
 		SessionAPIKey:       getEnv("SESSION_API_KEY", ""), // Optional
+		QdrantURL:           getEnv("QDRANT_URL", ""),
+		QdrantAPIKey:        getEnv("QDRANT_API_KEY", ""),
 	}
 }
 
