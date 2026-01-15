@@ -194,6 +194,37 @@ func (h *StorefrontHandler) Similar(c *gin.Context) {
 	// Force payload return
 	bodyMap["with_payload"] = true
 
+	// Clean up query parameters (remove nulls)
+	if query, ok := bodyMap["query"].(map[string]interface{}); ok {
+		if recommend, ok := query["recommend"].(map[string]interface{}); ok {
+			// Clean positive array
+			if positive, ok := recommend["positive"].([]interface{}); ok {
+				cleanedPositive := make([]interface{}, 0, len(positive))
+				for _, v := range positive {
+					if v != nil {
+						cleanedPositive = append(cleanedPositive, v)
+					}
+				}
+				if len(cleanedPositive) == 0 {
+					// If no positive IDs, return empty result without querying Qdrant
+					c.JSON(http.StatusOK, gin.H{"result": []interface{}{}, "status": "ok"})
+					return
+				}
+				recommend["positive"] = cleanedPositive
+			}
+			// Clean negative array
+			if negative, ok := recommend["negative"].([]interface{}); ok {
+				cleanedNegative := make([]interface{}, 0, len(negative))
+				for _, v := range negative {
+					if v != nil {
+						cleanedNegative = append(cleanedNegative, v)
+					}
+				}
+				recommend["negative"] = cleanedNegative
+			}
+		}
+	}
+
 	// Re-marshal
 	newBody, err := json.Marshal(bodyMap)
 	if err != nil {
