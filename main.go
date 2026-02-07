@@ -134,8 +134,8 @@ func main() {
 			devHandler := handlers.NewDevHandler(cfg)
 			proxyGroup := devGroup.Group("/proxy")
 			{
-				proxyGroup.POST("/qdrant/*path", devHandler.ProxyQdrant)
-				proxyGroup.POST("/meilisearch/*path", devHandler.ProxyMeilisearch)
+				proxyGroup.Any("/qdrant/*path", devHandler.ProxyQdrant)
+				proxyGroup.Any("/meilisearch/*path", devHandler.ProxyMeilisearch)
 			}
 		}
 	}
