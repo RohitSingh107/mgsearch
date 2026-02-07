@@ -199,6 +199,16 @@ Auth: Optional
 Response: [session1, session2, ...]
 ```
 
+### Development Proxy
+
+```bash
+# Qdrant Proxy
+ANY /api/dev/proxy/qdrant/*path
+
+# Meilisearch Proxy
+ANY /api/dev/proxy/meilisearch/*path
+```
+
 ---
 
 ## Authentication Quick Reference

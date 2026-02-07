@@ -12,6 +12,7 @@ Complete documentation of all backend API endpoints, their use cases, request/re
 6. [Session Storage](#session-storage)
 7. [Storefront Search](#storefront-search)
 8. [Webhooks](#webhooks)
+9. [Development Proxy Endpoints](#development-proxy-endpoints)
 
 ---
 
@@ -253,3 +254,46 @@ Get the status of an asynchronous task (like document indexing or settings updat
 ## Webhooks
 
 ... (Rest of Webhooks documentation remains the same)
+
+---
+
+## Development Proxy Endpoints
+
+These endpoints act as a proxy to the underlying search engines (Qdrant and Meilisearch) for development and debugging purposes. They forward requests directly to the cloud services using the configured credentials.
+
+**Base URL:** `/api/dev/proxy`
+
+### `ANY /api/dev/proxy/qdrant/*path`
+
+Proxies requests to the Qdrant Cloud instance.
+
+**Example Request:**
+
+```bash
+curl --location 'http://localhost:8080/api/dev/proxy/qdrant/collections/my_collection/points/query' \
+--header 'Content-Type: application/json' \
+--data '{
+  "with_payload": true,
+  "query": {
+    "recommend": {
+      "positive": [12345],
+      "negative": []
+    }
+  }
+}'
+```
+
+### `ANY /api/dev/proxy/meilisearch/*path`
+
+Proxies requests to the Meilisearch Cloud instance.
+
+**Example Request:**
+
+```bash
+curl --location 'http://localhost:8080/api/dev/proxy/meilisearch/indexes/my_index/search' \
+--header 'Content-Type: application/json' \
+--data '{
+    "q": "search term"
+}'
+```
+

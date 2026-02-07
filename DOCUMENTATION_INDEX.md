@@ -100,6 +100,7 @@ This documentation suite provides complete coverage of the MGSearch architecture
 | [docs/QUICK_START.md](docs/QUICK_START.md) | Development quick start | **Getting up and running** |
 | [docs/DATABASE_COMMANDS.md](docs/DATABASE_COMMANDS.md) | MongoDB commands & queries | **Database operations** |
 | [docs/IMPLEMENTATION_SUMMARY.md](docs/IMPLEMENTATION_SUMMARY.md) | Implementation overview | **Project status, timeline** |
+| [docs/DEV_TOOLS.md](docs/DEV_TOOLS.md) | Development helper tools | **Debugging, direct access** |
 
 ### Troubleshooting
 
