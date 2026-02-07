@@ -53,3 +53,37 @@ func (h *DevHandler) ProxyQdrant(c *gin.Context) {
 
 	proxy.ServeHTTP(c.Writer, c.Request)
 }
+
+func (h *DevHandler) ProxyMeilisearch(c *gin.Context) {
+	if h.cfg.MeilisearchURL == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "MEILISEARCH_URL is not configured"})
+		return
+	}
+
+	meilisearchURL := h.cfg.MeilisearchURL
+	if !strings.HasPrefix(meilisearchURL, "http://") && !strings.HasPrefix(meilisearchURL, "https://") {
+		meilisearchURL = "http://" + meilisearchURL
+	}
+
+	remote, err := url.Parse(meilisearchURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid Meilisearch URL configuration"})
+		return
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(remote)
+
+	proxy.Director = func(req *http.Request) {
+		req.Host = remote.Host
+		req.URL.Scheme = remote.Scheme
+		req.URL.Host = remote.Host
+		req.URL.Path = c.Param("path")
+
+		// Add API Key
+		if h.cfg.MeilisearchAPIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+h.cfg.MeilisearchAPIKey)
+		}
+	}
+
+	proxy.ServeHTTP(c.Writer, c.Request)
+}
