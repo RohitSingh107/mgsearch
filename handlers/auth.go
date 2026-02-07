@@ -142,11 +142,6 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	publicKey, err := security.GenerateAPIKey(16)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate api key"})
-		return
-	}
 	privateKey, err := security.GenerateAPIKey(32)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate private key"})
@@ -190,7 +185,6 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		ShopDomain:           shop,
 		ShopName:             shop,
 		EncryptedAccessToken: encryptedToken,
-		APIKeyPublic:         publicKey,
 		APIKeyPrivate:        privateKey,
 		ProductIndexUID:      indexUID,
 		MeilisearchIndexUID:  indexUID,
@@ -292,12 +286,6 @@ func (h *AuthHandler) InstallStore(c *gin.Context) {
 		return
 	}
 
-	// Generate API keys
-	publicKey, err := security.GenerateAPIKey(16)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate api key"})
-		return
-	}
 	privateKey, err := security.GenerateAPIKey(32)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate private key"})
@@ -354,7 +342,6 @@ func (h *AuthHandler) InstallStore(c *gin.Context) {
 		ShopDomain:           shop,
 		ShopName:             shopName,
 		EncryptedAccessToken: encryptedToken,
-		APIKeyPublic:         publicKey,
 		APIKeyPrivate:        privateKey,
 		ProductIndexUID:      indexUID,
 		MeilisearchIndexUID:  indexUID,

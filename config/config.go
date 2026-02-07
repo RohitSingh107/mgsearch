@@ -47,7 +47,7 @@ func LoadConfig() *Config {
 		EncryptionKey:       getEnv("ENCRYPTION_KEY", ""),
 		WebhookSharedSecret: getEnv("SHOPIFY_WEBHOOK_SECRET", ""),
 		SessionAPIKey:       getEnv("SESSION_API_KEY", ""), // Optional
-		QdrantURL:           getEnv("QDRANT_URL", ""),
+		QdrantURL:           getEnv("QDRANT_CLUSTER_ENDPOINT", ""),
 		QdrantAPIKey:        getEnv("QDRANT_API_KEY", ""),
 	}
 }

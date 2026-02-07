@@ -65,7 +65,6 @@ func main() {
 	indexRepo := repositories.NewIndexRepository(db)
 	meiliService := services.NewMeilisearchService(cfg)
 	shopifyService := services.NewShopifyService(cfg)
-	qdrantService := services.NewQdrantService(cfg)
 
 	authHandler, err := handlers.NewAuthHandler(cfg, shopifyService, storeRepo, meiliService)
 	if err != nil {
@@ -77,7 +76,6 @@ func main() {
 		log.Fatalf("failed to initialize session handler: %v", err)
 	}
 	webhookHandler := handlers.NewWebhookHandler(shopifyService, storeRepo, meiliService)
-	storefrontHandler := handlers.NewStorefrontHandler(storeRepo, meiliService, qdrantService)
 	searchHandler := handlers.NewSearchHandler(meiliService, clientRepo)
 	settingsHandler := handlers.NewSettingsHandler(meiliService, clientRepo)
 	tasksHandler := handlers.NewTasksHandler(meiliService)
@@ -129,6 +127,16 @@ func main() {
 			sessionGroup.DELETE("/batch", sessionHandler.DeleteMultipleSessions)
 			sessionGroup.GET("/shop/:shop", sessionHandler.FindSessionsByShop)
 		}
+
+		// Dev Proxy Routes
+		devGroup := api.Group("/dev")
+		{
+			devHandler := handlers.NewDevHandler(cfg)
+			proxyGroup := devGroup.Group("/proxy")
+			{
+				proxyGroup.POST("/qdrant/*path", devHandler.ProxyQdrant)
+			}
+		}
 	}
 
 	router.POST("/webhooks/shopify/:topic/:subtopic", webhookHandler.HandleShopifyWebhook)
@@ -166,14 +174,6 @@ func main() {
 			clientsGroup.POST("/:client_id/indexes/:index_name/documents", searchHandler.IndexDocument)
 			clientsGroup.PATCH("/:client_id/indexes/:index_name/settings", settingsHandler.UpdateSettings)
 		}
-
-		// Storefront search endpoints (no authentication required)
-		v1.GET("/search", storefrontHandler.Search)
-		v1.POST("/search", storefrontHandler.Search) // Support POST for JSON body with filters
-
-		// Similar products endpoint
-		v1.GET("/similar", storefrontHandler.Similar)
-		v1.POST("/similar", storefrontHandler.Similar)
 
 		// Client-specific Search/Doc endpoints (API key authentication required)
 		// These are used by the client's application (server-side or client-side if key is exposed)

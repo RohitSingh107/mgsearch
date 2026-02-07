@@ -189,11 +189,6 @@ func (h *SessionHandler) createOrUpdateStoreFromSession(ctx context.Context, sho
 
 	// Store doesn't exist, create new one
 	// Generate API keys
-	publicKey, err := security.GenerateAPIKey(16)
-	if err != nil {
-		return err
-	}
-
 	privateKey, err := security.GenerateAPIKey(32)
 	if err != nil {
 		return err
@@ -240,7 +235,6 @@ func (h *SessionHandler) createOrUpdateStoreFromSession(ctx context.Context, sho
 		ShopDomain:           shopDomain,
 		ShopName:             shopName,
 		EncryptedAccessToken: encryptedToken,
-		APIKeyPublic:         publicKey,
 		APIKeyPrivate:        privateKey,
 		ProductIndexUID:      indexUID,
 		MeilisearchIndexUID:  indexUID,

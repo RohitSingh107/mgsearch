@@ -19,7 +19,6 @@ type Store struct {
 	MeilisearchDocType   string                 `json:"meilisearch_document_type" bson:"meilisearch_document_type"`
 	MeilisearchURL       string                 `json:"meilisearch_url" bson:"meilisearch_url"`
 	MeilisearchAPIKey    []byte                 `json:"-" bson:"meilisearch_api_key"`
-	QdrantCollectionName string                 `json:"qdrant_collection_name" bson:"qdrant_collection_name"`
 	PlanLevel            string                 `json:"plan_level" bson:"plan_level"`
 	Status               string                 `json:"status" bson:"status"`
 	WebhookSecret        string                 `json:"-" bson:"webhook_secret"`
@@ -78,16 +77,4 @@ func (s *Store) DocumentType() string {
 		return s.MeilisearchDocType
 	}
 	return "product"
-}
-
-// QdrantCollection returns the Qdrant collection name for the store.
-// If not explicitly set, falls back to ProductIndexUID or ShopDomain.
-func (s *Store) QdrantCollection() string {
-	if s.QdrantCollectionName != "" {
-		return s.QdrantCollectionName
-	}
-	if s.ProductIndexUID != "" {
-		return s.ProductIndexUID
-	}
-	return s.ShopDomain
 }

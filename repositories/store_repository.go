@@ -50,7 +50,6 @@ func (r *StoreRepository) CreateOrUpdate(ctx context.Context, store *models.Stor
 		"$set": bson.M{
 			"shop_name":                store.ShopName,
 			"encrypted_access_token":   store.EncryptedAccessToken,
-			"api_key_public":           store.APIKeyPublic,
 			"api_key_private":          store.APIKeyPrivate,
 			"product_index_uid":        store.ProductIndexUID,
 			"meilisearch_index_uid":    store.MeilisearchIndexUID,
@@ -92,18 +91,6 @@ func (r *StoreRepository) CreateOrUpdate(ctx context.Context, store *models.Stor
 func (r *StoreRepository) GetByShopDomain(ctx context.Context, domain string) (*models.Store, error) {
 	var store models.Store
 	err := r.collection.FindOne(ctx, bson.M{"shop_domain": domain}).Decode(&store)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, errors.New("store not found")
-		}
-		return nil, err
-	}
-	return &store, nil
-}
-
-func (r *StoreRepository) GetByPublicAPIKey(ctx context.Context, key string) (*models.Store, error) {
-	var store models.Store
-	err := r.collection.FindOne(ctx, bson.M{"api_key_public": key}).Decode(&store)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, errors.New("store not found")
